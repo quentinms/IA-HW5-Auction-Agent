@@ -30,7 +30,7 @@ public class AuctionAgent implements AuctionBehavior {
 	private Agent agent;
 	//private Random random;
 	private List<Vehicle> vehicles;
-	private TaskSet tasks;
+	private List<Task> tasks;
 	private List<Plan> currentPlans;
 	private List<Plan> futurePlans;
 	//private City currentCity;
@@ -43,7 +43,15 @@ public class AuctionAgent implements AuctionBehavior {
 		this.distribution = distribution;
 		this.agent = agent;
 		this.vehicles = agent.vehicles();
-		this.tasks = TaskSet.create(new Task[0]);
+		this.tasks = new ArrayList<Task>();
+		
+		
+		this.currentPlans = new ArrayList<Plan>(vehicles.size());
+		this.futurePlans = new ArrayList<Plan>(vehicles.size());
+		for (Vehicle v: vehicles){
+			currentPlans.add(new Plan(v.homeCity()));
+			futurePlans.add(new Plan(v.homeCity()));
+		}
 		//this.currentCity = vehicle.homeCity();
 
 		/*long seed = -9019554669489983951L * currentCity.hashCode() * agent.id();
@@ -65,13 +73,31 @@ public class AuctionAgent implements AuctionBehavior {
 
 		//TODO compute marginal cost
 		
-		TaskSet futureTasks = TaskSet.copyOf(tasks);
+		ArrayList<Task> futureTasks = new ArrayList<Task>(tasks);
 		futureTasks.add(task);
+		//futureTasks.add(task);
+		/*ArrayList<Task> array = new ArrayList<Task>();
+		array.addAll(tasks);
+		array.add(task);
+		TaskSet set = TaskSet.create(array.toArray(new Task[0]));*/
 		
 		//TODO Loop
 		this.futurePlans = centralizedPlan(vehicles, futureTasks, 0.8);
+		
+		double marginalCost = cost(futurePlans) - cost(currentPlans);
 
-		return (long) Math.round(1000);
+		return (long) Math.round(marginalCost+1);
+	}
+	
+	double cost(List<Plan> plans){
+		double cost = 0.0;
+		
+		for (int i = 0; i < vehicles.size(); i++){
+			Plan p = plans.get(i);
+			cost += p.totalDistance() * vehicles.get(i).costPerKm();
+		}
+		
+		return cost;
 	}
 
 	@Override
@@ -79,7 +105,7 @@ public class AuctionAgent implements AuctionBehavior {
 		return currentPlans;
 	}
 
-	private List<Plan> centralizedPlan(List<Vehicle> vehicles, TaskSet tasks, double p) {
+	private List<Plan> centralizedPlan(List<Vehicle> vehicles, ArrayList<Task> tasks, double p) {
 
 		Solution.vehicles = vehicles;
 		Solution.tasks = tasks;
@@ -130,7 +156,7 @@ public class AuctionAgent implements AuctionBehavior {
 	 * @param tasks the liste of tasks
 	 * @return an initial solution
 	 */
-	private Solution selectInitialSolution(List<Vehicle> vehicles, TaskSet tasks) {
+	private Solution selectInitialSolution(List<Vehicle> vehicles, List<Task> tasks) {
 
 		Vehicle biggestVehicle = null;
 		int maxCapacity = 0;
@@ -154,7 +180,7 @@ public class AuctionAgent implements AuctionBehavior {
 		
 	}
 
-	private List<Solution> chooseNeighbours(Solution Aold, TaskSet tasks, List<Vehicle> vehicles) {
+	private List<Solution> chooseNeighbours(Solution Aold, List<Task> tasks, List<Vehicle> vehicles) {
 
 		List<Solution> N = new ArrayList<Solution>();
 		
@@ -309,7 +335,7 @@ class Solution {
 	protected Double cost;
 
 	public static List<Vehicle> vehicles;
-	public static TaskSet tasks;
+	public static List<Task> tasks;
 	
 	public Solution() {
 		actionsList = new HashMap<Vehicle, List<Action>>();
@@ -416,7 +442,7 @@ class Solution {
 		 * Constraint 2
 		 * Pickups actions of a task must be before corresponding deliveries, all picked up tasks must be delivered and all tasks available must be picked up.
 		 */
-		TaskSet availableTasks = TaskSet.copyOf(tasks);
+		ArrayList<Task> availableTasks = new ArrayList<Task>(tasks);
 		
 		for (Vehicle vehicle : vehicles) {
 			
