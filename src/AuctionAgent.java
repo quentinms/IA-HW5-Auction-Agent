@@ -36,8 +36,7 @@ public class AuctionAgent implements AuctionBehavior {
 	//private City currentCity;
 
 	@Override
-	public void setup(Topology topology, TaskDistribution distribution,
-			Agent agent) {
+	public void setup(Topology topology, TaskDistribution distribution, Agent agent) {
 
 		this.topology = topology;
 		this.distribution = distribution;
@@ -47,10 +46,10 @@ public class AuctionAgent implements AuctionBehavior {
 		
 		Solution.vehicles = this.vehicles;
 		
-		Solution s = new Solution(new ArrayList<Task>());
-		s.cost = 0.0;
-		currentPlans = s;
-		futurePlans = s;
+		Solution solution = new Solution(new ArrayList<Task>());
+		solution.cost = 0.0;
+		currentPlans = solution;
+		futurePlans = solution;
 	
 		//this.currentCity = vehicle.homeCity();
 
@@ -71,22 +70,16 @@ public class AuctionAgent implements AuctionBehavior {
 	@Override
 	public Long askPrice(Task task) {
 
-		//TODO compute marginal cost
 		ArrayList<Task> futureTasks = new ArrayList<Task>(tasks);
 		futureTasks.add(task);
 		
 		//TODO Loop
 		this.futurePlans = centralizedPlan(vehicles, futureTasks, 0.8);
 		
+		double marginalCost = futurePlans.cost - currentPlans.cost;
 		
-		//TODO never bid negative values
-		double marginalCost =futurePlans.cost - currentPlans.cost;
+		return marginalCost > 0 ? (long) Math.round(marginalCost + 1) : Long.MAX_VALUE;
 		
-		if(marginalCost > 0){
-			return (long) Math.round(marginalCost+1);
-		} else {
-			return Long.MAX_VALUE;
-		}
 	}
 	
 	@Override
