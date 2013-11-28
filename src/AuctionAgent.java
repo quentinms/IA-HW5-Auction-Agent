@@ -47,7 +47,7 @@ public class AuctionAgent implements AuctionBehavior {
 		
 		Solution.vehicles = this.vehicles;
 		
-		Solution s = new Solution();
+		Solution s = new Solution(new ArrayList<Task>());
 		s.cost = 0.0;
 		currentPlans = s;
 		futurePlans = s;
@@ -61,7 +61,7 @@ public class AuctionAgent implements AuctionBehavior {
 	@Override
 	public void auctionResult(Task previous, int winner, Long[] bids) {
 		if (winner == agent.id()) {
-			System.out.println(previous.reward);
+			System.out.println("Task "+previous.id);
 			this.tasks.add(previous);
 			this.futurePlans.tasks = this.tasks;
 			this.currentPlans = this.futurePlans;
@@ -79,10 +79,14 @@ public class AuctionAgent implements AuctionBehavior {
 		this.futurePlans = centralizedPlan(vehicles, futureTasks, 0.8);
 		
 		
-		//TODO never bid negative
+		//TODO never bid negative values
 		double marginalCost =futurePlans.cost - currentPlans.cost;
-
-		return (long) Math.round(marginalCost+1);
+		
+		if(marginalCost > 0){
+			return (long) Math.round(marginalCost+1);
+		} else {
+			return Long.MAX_VALUE;
+		}
 	}
 	
 	@Override
@@ -97,8 +101,8 @@ public class AuctionAgent implements AuctionBehavior {
 	private Solution centralizedPlan(List<Vehicle> vehicles, ArrayList<Task> tasks, double p) {
 
 		Solution.vehicles = vehicles;
-		Solution.tasks = tasks;
-		Solution Aold = new Solution();
+
+		Solution Aold = new Solution(tasks);
 		Aold.cost = Double.POSITIVE_INFINITY;
 		
 		//The biggest vehicle handles tasks sequentially
@@ -156,7 +160,7 @@ public class AuctionAgent implements AuctionBehavior {
 			}
 		}
 
-		Solution initialSolution = new Solution();
+		Solution initialSolution = new Solution(tasks);
 
 		for (Task task : tasks) {
 			initialSolution.actionsList.get(biggestVehicle).add(new Action(task, "pickup"));
@@ -324,9 +328,10 @@ class Solution {
 	protected Double cost;
 
 	public static List<Vehicle> vehicles;
-	public static List<Task> tasks;
+	public  List<Task> tasks;
 	
-	public Solution() {
+	public Solution(List<Task> tasks) {
+		this.tasks = tasks;
 		actionsList = new HashMap<Vehicle, List<Action>>();
 		for (Vehicle vehicle : vehicles) {
 			actionsList.put(vehicle, new ArrayList<Action>());
@@ -339,6 +344,7 @@ class Solution {
 			actionsList.put(vehicle, new ArrayList<Action>(parentSolution.actionsList.get(vehicle)));
 		}
 		computeCost();
+		tasks = new ArrayList<Task>(parentSolution.tasks);
 	}
 
 	/*
