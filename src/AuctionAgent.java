@@ -31,8 +31,8 @@ public class AuctionAgent implements AuctionBehavior {
 	//private Random random;
 	private List<Vehicle> vehicles;
 	private List<Task> tasks;
-	private List<Plan> currentPlans;
-	private List<Plan> futurePlans;
+	private Solution currentPlans;
+	private Solution futurePlans;
 	//private City currentCity;
 
 	@Override
@@ -45,13 +45,13 @@ public class AuctionAgent implements AuctionBehavior {
 		this.vehicles = agent.vehicles();
 		this.tasks = new ArrayList<Task>();
 		
+		Solution.vehicles = this.vehicles;
 		
-		this.currentPlans = new ArrayList<Plan>(vehicles.size());
-		this.futurePlans = new ArrayList<Plan>(vehicles.size());
-		for (Vehicle v: vehicles){
-			currentPlans.add(new Plan(v.homeCity()));
-			futurePlans.add(new Plan(v.homeCity()));
-		}
+		Solution s = new Solution();
+		s.cost = 0.0;
+		currentPlans = s;
+		futurePlans = s;
+	
 		//this.currentCity = vehicle.homeCity();
 
 		/*long seed = -9019554669489983951L * currentCity.hashCode() * agent.id();
@@ -61,10 +61,10 @@ public class AuctionAgent implements AuctionBehavior {
 	@Override
 	public void auctionResult(Task previous, int winner, Long[] bids) {
 		if (winner == agent.id()) {
-			//currentCity = previous.deliveryCity;
+			System.out.println(previous.reward);
 			this.tasks.add(previous);
+			this.futurePlans.tasks = this.tasks;
 			this.currentPlans = this.futurePlans;
-			System.out.println(winner);
 		}
 	}
 	
@@ -72,40 +72,29 @@ public class AuctionAgent implements AuctionBehavior {
 	public Long askPrice(Task task) {
 
 		//TODO compute marginal cost
-		
 		ArrayList<Task> futureTasks = new ArrayList<Task>(tasks);
 		futureTasks.add(task);
-		//futureTasks.add(task);
-		/*ArrayList<Task> array = new ArrayList<Task>();
-		array.addAll(tasks);
-		array.add(task);
-		TaskSet set = TaskSet.create(array.toArray(new Task[0]));*/
 		
 		//TODO Loop
 		this.futurePlans = centralizedPlan(vehicles, futureTasks, 0.8);
 		
-		double marginalCost = cost(futurePlans) - cost(currentPlans);
+		
+		//TODO never bid negative
+		double marginalCost =futurePlans.cost - currentPlans.cost;
 
 		return (long) Math.round(marginalCost+1);
 	}
 	
-	double cost(List<Plan> plans){
-		double cost = 0.0;
-		
-		for (int i = 0; i < vehicles.size(); i++){
-			Plan p = plans.get(i);
-			cost += p.totalDistance() * vehicles.get(i).costPerKm();
-		}
-		
-		return cost;
-	}
-
 	@Override
 	public List<Plan> plan(List<Vehicle> vehicles, TaskSet tasks) {
-		return currentPlans;
+		System.out.println(tasks);
+		System.out.println(currentPlans.tasks);
+		//TODO pourquoi ça marche pas
+		//return currentPlans.getPlan();
+		return centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8).getPlan();
 	}
 
-	private List<Plan> centralizedPlan(List<Vehicle> vehicles, ArrayList<Task> tasks, double p) {
+	private Solution centralizedPlan(List<Vehicle> vehicles, ArrayList<Task> tasks, double p) {
 
 		Solution.vehicles = vehicles;
 		Solution.tasks = tasks;
@@ -140,11 +129,11 @@ public class AuctionAgent implements AuctionBehavior {
 				A = N.get((int) Math.random()*N.size());
 			}
 			
-			System.out.println("[Info] Iter " + count + " : " + A.cost);
+			//System.out.println("[Info] Iter " + count + " : " + A.cost);
 			count++;
 		}
 		
-		return A.getPlan();
+		return A;
 	
 
 	}
