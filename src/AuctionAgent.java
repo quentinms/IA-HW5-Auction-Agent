@@ -6,11 +6,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 
+import org.apache.commons.math.MathException;
+
 import logist.Measures;
 import logist.behavior.AuctionBehavior;
 import logist.agent.Agent;
 import logist.simulation.Vehicle;
 import logist.plan.Plan;
+import logist.plan.Action.Delivery;
 import logist.task.Task;
 import logist.task.TaskDistribution;
 import logist.task.TaskSet;
@@ -34,7 +37,9 @@ public class AuctionAgent implements AuctionBehavior {
 	private Solution currentPlans;
 	private Solution futurePlans;
 	//private City currentCity;
-
+	private HashMap<Integer, ArrayList<Task>> attributions = new HashMap<Integer, ArrayList<Task>>();
+	long estimatedBid; // estimation of others' marginal cost
+	
 	@Override
 	public void setup(Topology topology, TaskDistribution distribution, Agent agent) {
 
@@ -59,12 +64,25 @@ public class AuctionAgent implements AuctionBehavior {
 
 	@Override
 	public void auctionResult(Task previous, int winner, Long[] bids) {
+		
 		if (winner == agent.id()) {
 			System.out.println("Task "+previous.id);
 			this.tasks.add(previous);
 			this.futurePlans.tasks = this.tasks;
 			this.currentPlans = this.futurePlans;
 		}
+		
+		System.out.println("estimatedBid : " + estimatedBid);
+		System.out.println("actual Bid : " + bids[1]);
+		
+		if (attributions.get(winner) == null) {
+			ArrayList<Task> tasksList = new ArrayList<Task>();
+			tasksList.add(previous);
+			attributions.put(winner, tasksList);
+		} else {
+			attributions.get(winner).add(previous);
+		}
+		
 	}
 	
 	@Override
@@ -77,17 +95,100 @@ public class AuctionAgent implements AuctionBehavior {
 		this.futurePlans = centralizedPlan(vehicles, futureTasks, 0.8);
 		
 		double marginalCost = futurePlans.cost - currentPlans.cost;
+		ArrayList<Task> futureAttributions;
+		if (attributions.get(0) == null) {
+			futureAttributions = new ArrayList<Task>();
+		} else {
+			futureAttributions = new ArrayList<Task>(attributions.get(0));
+		}
+		futureAttributions.add(task);
+		if (attributions.get(0) == null) {
+			estimatedBid = Math.round(centralizedPlan(vehicles, futureAttributions, 0.8).cost);
+		} else {
+			estimatedBid = Math.round(centralizedPlan(vehicles, futureAttributions, 0.8).cost
+					- centralizedPlan(vehicles, attributions.get(0), 0.8).cost);
+		}
+		
+		if (marginalCost > 0) {
+			double factor = estimateFactor(task);
+			double percentage = 1;//.05;
+			double cost = Math.min(marginalCost, percentage * factor * marginalCost);
+		}
 		
 		return marginalCost > 0 ? (long) Math.round(marginalCost + 1) : Long.MAX_VALUE;
 		
 	}
 	
+	/**
+	 * A function to have an estimation of our competing advantage for the
+	 * considered task.
+	 * @param task
+	 * @return
+	 */
+	private double estimateFactor(Task task) {
+		
+		/**
+		 * The distance between our closest vehicle and the considered task.
+		 */
+		double minOwnDistance = Double.POSITIVE_INFINITY;
+		for (Task ownTask : tasks) {
+			double distanceDeliveryToPickup   = ownTask.deliveryCity.distanceTo(task.pickupCity);
+//			System.out.println("\townDistanceDeliveryToPickup = " + distanceDeliveryToPickup);
+			minOwnDistance = Math.min(minOwnDistance, distanceDeliveryToPickup);
+			double distancePickupToDelivery   = ownTask.pickupCity.distanceTo(task.deliveryCity);
+//			System.out.println("\townDistancePickupToDelivery = " + distancePickupToDelivery);
+			minOwnDistance = Math.min(minOwnDistance, distancePickupToDelivery);
+			double distancePickupToPickup     = ownTask.pickupCity.distanceTo(task.pickupCity);
+//			System.out.println("\townDistancePickupToPickup = " + distancePickupToPickup);
+			minOwnDistance = Math.min(minOwnDistance, distancePickupToPickup);
+			double distanceDeliveryToDelivery = ownTask.deliveryCity.distanceTo(task.deliveryCity);
+//			System.out.println("\townDistanceDeliveryToDelivery = " + distanceDeliveryToDelivery);
+			minOwnDistance = Math.min(minOwnDistance, distanceDeliveryToDelivery);
+		}
+		
+		/**
+		 * The distance between any concurrent closest's vehicle and the considered task.
+		 */
+		double minConcurrentDistance = Double.POSITIVE_INFINITY;
+		for (List<Task> concurrentTasks : attributions.values()) {			
+			for (Task concurrentTask : concurrentTasks) {
+				double distanceDeliveryToPickup   = concurrentTask.deliveryCity.distanceTo(task.pickupCity);
+//				System.out.println("\tconcurrentDistanceDeliveryToPickup = " + distanceDeliveryToPickup);
+				minConcurrentDistance = Math.min(minConcurrentDistance, distanceDeliveryToPickup);
+				double distancePickupToDelivery   = concurrentTask.pickupCity.distanceTo(task.deliveryCity);
+//				System.out.println("\tconcurrentDistancePickupToDelivery = " + distancePickupToDelivery);
+				minConcurrentDistance = Math.min(minConcurrentDistance, distancePickupToDelivery);
+				double distancePickupToPickup     = concurrentTask.pickupCity.distanceTo(task.pickupCity);
+//				System.out.println("\tconcurrentDistancePickupToPickup = " + distancePickupToPickup);
+				minConcurrentDistance = Math.min(minConcurrentDistance, distancePickupToPickup);
+				double distanceDeliveryToDelivery = concurrentTask.deliveryCity.distanceTo(task.deliveryCity);
+//				System.out.println("\tconcurrentDistanceDeliveryToDelivery = " + distanceDeliveryToDelivery);
+				minConcurrentDistance = Math.min(minConcurrentDistance, distanceDeliveryToDelivery);
+			}
+		}
+		
+		double advantage = 1;
+		if (!(minOwnDistance == Double.POSITIVE_INFINITY || minConcurrentDistance == 0)) {
+			advantage = minConcurrentDistance / minOwnDistance;
+			if (advantage < 1) advantage = 1;
+		}
+//		System.out.println("minOwnDistance = " + minOwnDistance);
+//		System.out.println("minConcurrentDistance = " + minConcurrentDistance);
+//		System.out.println("Yay our advantage is: (wait for it) " + advantage);
+		
+		return advantage;
+	}
+	
 	@Override
 	public List<Plan> plan(List<Vehicle> vehicles, TaskSet tasks) {
-		System.out.println(tasks);
-		System.out.println(currentPlans.tasks);
+//		System.out.println(tasks);
+//		System.out.println(currentPlans.tasks);
+//		System.out.println(attributions);
 		//TODO pourquoi ça marche pas
-		//return currentPlans.getPlan();
+		//TODO la dernière tâche a comme cout un cout autour de 62k au lieu de 344,
+		//ce qui semble être le cout initial de la tâche avant la sous-enchère, càd
+		//que le cout n'a pas été mis à jour.
+//		return currentPlans.getPlan();
 		return centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8).getPlan();
 	}
 
