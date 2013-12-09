@@ -14,4 +14,9 @@
 		<set class-name="AuctionAgent"/>
 	</agent>
 	
+	<agent name="auction-dummy">
+		<set class-path="bin/"/>
+		<set class-name="AuctionAgentDummy"/>
+	</agent>
+	
 </agents>

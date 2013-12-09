@@ -22,39 +22,31 @@ import logist.topology.Topology.City;
  * 
  */
 @SuppressWarnings("unused")
-public class AuctionAgent implements AuctionBehavior {
+public class AuctionAgentDummy implements AuctionBehavior {
 
 	private Topology topology;
-	private TaskDistribution distribution;
+
 	private Agent agent;
 	//private Random random;
 	private List<Vehicle> vehicles;
 	private List<Task> tasks;
-	private Solution currentPlans;
-	private Solution futurePlans;
-	//private City currentCity;
-	private HashMap<Integer, ArrayList<Task>> attributions = new HashMap<Integer, ArrayList<Task>>();
-	long estimatedBid; // estimation of others' marginal cost
-	long bias;
-	
+	private Solution2 currentPlans;
+	private Solution2 futurePlans;
 	
 	@Override
 	public void setup(Topology topology, TaskDistribution distribution, Agent agent) {
 
 		this.topology = topology;
-		this.distribution = distribution;
 		this.agent = agent;
 		this.vehicles = agent.vehicles();
 		this.tasks = new ArrayList<Task>();
 		
-		Solution.vehicles = this.vehicles;
+		Solution2.vehicles = this.vehicles;
 		
-		currentPlans = new Solution(new ArrayList<Task>());
+		currentPlans = new Solution2(new ArrayList<Task>());
 		currentPlans.cost = 0.0;
-		futurePlans = new Solution(new ArrayList<Task>());
+		futurePlans = new Solution2(new ArrayList<Task>());
 		futurePlans.cost = Double.POSITIVE_INFINITY;
-		
-		bias = 0;
 	
 		//this.currentCity = vehicle.homeCity();
 
@@ -65,30 +57,9 @@ public class AuctionAgent implements AuctionBehavior {
 	@Override
 	public void auctionResult(Task previous, int winner, Long[] bids) {
 		
-		
-		System.out.println("Task "+previous.id+"   Winner:"+winner + " for " +bids[winner]);
-		
 		if (winner == agent.id()) {
 			this.tasks.add(previous);
-			//this.futurePlans.tasks = this.tasks;
 			this.currentPlans = this.futurePlans;
-		}
-		
-		
-		System.out.println("estimatedBid : " + estimatedBid);
-		System.out.println("estimatedBid (w/o bias): " + (estimatedBid + Math.round(bias/(1.0*(previous.id+1)))));
-		
-		System.out.println("actual bids : " + bids[0]);
-		System.out.println("Difference: " + (estimatedBid - bids[0]));
-		bias += (estimatedBid - bids[0]);
-		
-		
-		if (attributions.get(winner) == null) {
-			ArrayList<Task> tasksList = new ArrayList<Task>();
-			tasksList.add(previous);
-			attributions.put(winner, tasksList);
-		} else {
-			attributions.get(winner).add(previous);
 		}
 		
 	}
@@ -101,8 +72,8 @@ public class AuctionAgent implements AuctionBehavior {
 		
 		//TODO Loop
 		Double minCost = Double.POSITIVE_INFINITY;
-		for (int iter = 0; iter < 20; iter++){
-			Solution plan = centralizedPlan(vehicles, futureTasks, 0.8);
+		for (int iter = 0; iter < 50; iter++){
+			Solution2 plan = centralizedPlan(vehicles, futureTasks, 0.8);
 			if(plan.cost < minCost){
 				minCost = plan.cost;
 				this.futurePlans = plan;
@@ -110,44 +81,9 @@ public class AuctionAgent implements AuctionBehavior {
 		}
 		
 		double marginalCost = futurePlans.cost - currentPlans.cost;
+				
 		
-		
-		/*Estimating the opponent's bid*/
-		ArrayList<Task> futureAttributions;
-		if (attributions.get(0) == null) {
-			futureAttributions = new ArrayList<Task>();
-		} else {
-			futureAttributions = new ArrayList<Task>(attributions.get(0));
-		}
-		futureAttributions.add(task);
-		if (attributions.get(0) == null) {
-			estimatedBid = Math.round(centralizedPlan(vehicles, futureAttributions, 0.8).cost);
-		} else {
-			estimatedBid = Math.round(centralizedPlan(vehicles, futureAttributions, 0.8).cost
-					- centralizedPlan(vehicles, attributions.get(0), 0.8).cost);
-		}
-		
-		estimatedBid = estimatedBid - Math.round(bias/(1.0*(task.id+1)));
-		
-		//We suppose that the other agent does not bid negatives
-		estimatedBid = Math.max(estimatedBid, 0);
-		
-		
-		
-		/* Factor for the asking price*//*
-		if (marginalCost > 0) {
-			double factor = estimateFactor(task);
-			double percentage = 1;//.05;
-			double cost = Math.min(marginalCost, percentage * factor * marginalCost);
-		}*/
-		
-		
-		
-		if (marginalCost > 0){
-			return Math.round(marginalCost);
-		} else {
-			return Math.max(estimatedBid, 0);//Math.round(marginalCost);
-		}
+		return Math.max(0, Math.round(marginalCost));
 		
 	}
 	
@@ -157,118 +93,57 @@ public class AuctionAgent implements AuctionBehavior {
 	 * @param task
 	 * @return
 	 */
-	private double estimateFactor(Task task) {
-		
-		/**
-		 * The distance between our closest vehicle and the considered task.
-		 */
-		double minOwnDistance = Double.POSITIVE_INFINITY;
-		for (Task ownTask : tasks) {
-			double distanceDeliveryToPickup   = ownTask.deliveryCity.distanceTo(task.pickupCity);
-//			System.out.println("\townDistanceDeliveryToPickup = " + distanceDeliveryToPickup);
-			minOwnDistance = Math.min(minOwnDistance, distanceDeliveryToPickup);
-			double distancePickupToDelivery   = ownTask.pickupCity.distanceTo(task.deliveryCity);
-//			System.out.println("\townDistancePickupToDelivery = " + distancePickupToDelivery);
-			minOwnDistance = Math.min(minOwnDistance, distancePickupToDelivery);
-			double distancePickupToPickup     = ownTask.pickupCity.distanceTo(task.pickupCity);
-//			System.out.println("\townDistancePickupToPickup = " + distancePickupToPickup);
-			minOwnDistance = Math.min(minOwnDistance, distancePickupToPickup);
-			double distanceDeliveryToDelivery = ownTask.deliveryCity.distanceTo(task.deliveryCity);
-//			System.out.println("\townDistanceDeliveryToDelivery = " + distanceDeliveryToDelivery);
-			minOwnDistance = Math.min(minOwnDistance, distanceDeliveryToDelivery);
-		}
-		
-		/**
-		 * The distance between any concurrent closest's vehicle and the considered task.
-		 */
-		double minConcurrentDistance = Double.POSITIVE_INFINITY;
-		for (List<Task> concurrentTasks : attributions.values()) {			
-			for (Task concurrentTask : concurrentTasks) {
-				double distanceDeliveryToPickup   = concurrentTask.deliveryCity.distanceTo(task.pickupCity);
-//				System.out.println("\tconcurrentDistanceDeliveryToPickup = " + distanceDeliveryToPickup);
-				minConcurrentDistance = Math.min(minConcurrentDistance, distanceDeliveryToPickup);
-				double distancePickupToDelivery   = concurrentTask.pickupCity.distanceTo(task.deliveryCity);
-//				System.out.println("\tconcurrentDistancePickupToDelivery = " + distancePickupToDelivery);
-				minConcurrentDistance = Math.min(minConcurrentDistance, distancePickupToDelivery);
-				double distancePickupToPickup     = concurrentTask.pickupCity.distanceTo(task.pickupCity);
-//				System.out.println("\tconcurrentDistancePickupToPickup = " + distancePickupToPickup);
-				minConcurrentDistance = Math.min(minConcurrentDistance, distancePickupToPickup);
-				double distanceDeliveryToDelivery = concurrentTask.deliveryCity.distanceTo(task.deliveryCity);
-//				System.out.println("\tconcurrentDistanceDeliveryToDelivery = " + distanceDeliveryToDelivery);
-				minConcurrentDistance = Math.min(minConcurrentDistance, distanceDeliveryToDelivery);
-			}
-		}
-		
-		double advantage = 1;
-		if (!(minOwnDistance == Double.POSITIVE_INFINITY || minConcurrentDistance == 0)) {
-			advantage = minConcurrentDistance / minOwnDistance;
-			if (advantage < 1) advantage = 1;
-		}
-//		System.out.println("minOwnDistance = " + minOwnDistance);
-//		System.out.println("minConcurrentDistance = " + minConcurrentDistance);
-//		System.out.println("Yay our advantage is: (wait for it) " + advantage);
-		
-		return advantage;
-	}
 	
 	@Override
 	public List<Plan> plan(List<Vehicle> vehicles, TaskSet tasks) {
-//		System.out.println(tasks);
-//		System.out.println(currentPlans.tasks);
-//		System.out.println(attributions);
-		//TODO pourquoi ça marche pas
-		//TODO la dernière tâche a comme cout un cout autour de 62k au lieu de 344,
-		//ce qui semble être le cout initial de la tâche avant la sous-enchère, càd
-		//que le cout n'a pas été mis à jour.
-//		return currentPlans.getPlan();
 		
 		double income = 0;
 		for(Task t: tasks){
 			income += t.reward;
 		}
-		Solution sol = centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8);
-		for (int iter = 0; iter < 50; iter++){
-			Solution plan = centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8);
+		Solution2 sol = centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8);
+		for (int iter = 0; iter < 20; iter++){
+			Solution2 plan = centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8);
 			if(plan.cost < sol.cost){
 				sol = plan;
 			}
 		}
 		
 		
-		System.out.println("Agent: "+(income - sol.cost));
+		System.out.println("Dummy: "+(income - sol.cost));
 		
 		return sol.getPlan();
 	}
 
-	private Solution centralizedPlan(List<Vehicle> vehicles, ArrayList<Task> tasks, double p) {
+	private Solution2 centralizedPlan(List<Vehicle> vehicles, ArrayList<Task> tasks, double p) {
 
-		Solution.vehicles = vehicles;
+		Solution2.vehicles = vehicles;
 
-		Solution Aold = new Solution(tasks);
+		Solution2 Aold = new Solution2(tasks);
 		Aold.cost = Double.POSITIVE_INFINITY;
 		
 		//The biggest vehicle handles tasks sequentially
-		Solution A = selectInitialSolution(vehicles, tasks);
+		Solution2 A = selectInitialSolution2(vehicles, tasks);
 		
 		if (!A.verifyConstraints()) {
 			System.err.println("At least one task is too big for the biggest capacity's vehicle!");
 			System.exit(-1);
 		}
 		
-		List<Solution> N = null;
+		List<Solution2> N = null;
 
 		int count = 0;
 		
 		//We continue while we improve
 		while (count < 10000 && A.cost < Aold.cost) {
-			Aold = new Solution(A);
+			Aold = new Solution2(A);
 			
 			N = chooseNeighbours(Aold, tasks, vehicles);
 			
 			//We also add the old state in order to prevent NullPointerExceptions if no neighbour is better
 			N.add(Aold);
 			
-			//Select the best solution among the neighbours (and the current solution)
+			//Select the best Solution2 among the neighbours (and the current Solution2)
 			if(Math.random() < p){
 			A = localChoice(N);
 			} else {
@@ -285,13 +160,13 @@ public class AuctionAgent implements AuctionBehavior {
 	}
 
 	/**
-	 * As an initial solution, we just take the vehicle with biggest capacity
+	 * As an initial Solution2, we just take the vehicle with biggest capacity
 	 * and assign all the tasks to it, sequentially.
 	 * @param vehicles the list of vehicles
 	 * @param tasks the liste of tasks
-	 * @return an initial solution
+	 * @return an initial Solution2
 	 */
-	private Solution selectInitialSolution(List<Vehicle> vehicles, List<Task> tasks) {
+	private Solution2 selectInitialSolution2(List<Vehicle> vehicles, List<Task> tasks) {
 
 		Vehicle biggestVehicle = null;
 		int maxCapacity = 0;
@@ -302,22 +177,22 @@ public class AuctionAgent implements AuctionBehavior {
 			}
 		}
 
-		Solution initialSolution = new Solution(tasks);
+		Solution2 initialSolution2 = new Solution2(tasks);
 
 		for (Task task : tasks) {
-			initialSolution.actionsList.get(biggestVehicle).add(new Action(task, "pickup"));
-			initialSolution.actionsList.get(biggestVehicle).add(new Action(task, "delivery"));
+			initialSolution2.actionsList.get(biggestVehicle).add(new Action(task, "pickup"));
+			initialSolution2.actionsList.get(biggestVehicle).add(new Action(task, "delivery"));
 		}
 
-		initialSolution.computeCost();
+		initialSolution2.computeCost();
 
-		return initialSolution;
+		return initialSolution2;
 		
 	}
 
-	private List<Solution> chooseNeighbours(Solution Aold, List<Task> tasks, List<Vehicle> vehicles) {
+	private List<Solution2> chooseNeighbours(Solution2 Aold, List<Task> tasks, List<Vehicle> vehicles) {
 
-		List<Solution> N = new ArrayList<Solution>();
+		List<Solution2> N = new ArrayList<Solution2>();
 		
 		for (Vehicle vi : vehicles) {
 			
@@ -326,13 +201,13 @@ public class AuctionAgent implements AuctionBehavior {
 				// Applying the changing vehicle operation:
 				for (Vehicle vj : vehicles) {
 					if (!vj.equals(vi)) {
-						List<Solution> As = changingVehicle(Aold, vi, vj);
+						List<Solution2> As = changingVehicle(Aold, vi, vj);
 						N.addAll(As);
 					}
 				}
 				
 				// Applying the changing task order operation:
-				List<Solution> As = changingTaskOrder(Aold, vi);
+				List<Solution2> As = changingTaskOrder(Aold, vi);
 				N.addAll(As);
 						
 			}
@@ -344,26 +219,26 @@ public class AuctionAgent implements AuctionBehavior {
 	}
 
 	/*
-	 * We choose the best local solution. If multiple solutions are equally good, we choose one at random.
+	 * We choose the best local Solution2. If multiple Solution2s are equally good, we choose one at random.
 	 */
-	private Solution localChoice(List<Solution> N) {
+	private Solution2 localChoice(List<Solution2> N) {
 
-		List<Solution> bestSolutions = new ArrayList<Solution>();
+		List<Solution2> bestSolution2s = new ArrayList<Solution2>();
 		double leastCost = Double.POSITIVE_INFINITY;
 
-		for (Solution solution : N) {
+		for (Solution2 Solution2 : N) {
 			
-			if (solution.cost < leastCost) {
-				leastCost = solution.cost;
-				bestSolutions = new ArrayList<Solution>();
-				bestSolutions.add(solution);
+			if (Solution2.cost < leastCost) {
+				leastCost = Solution2.cost;
+				bestSolution2s = new ArrayList<Solution2>();
+				bestSolution2s.add(Solution2);
 				
-			} else if (solution.cost == leastCost) {
-				bestSolutions.add(solution);
+			} else if (Solution2.cost == leastCost) {
+				bestSolution2s.add(Solution2);
 			}
 		}
 	
-		return bestSolutions.get((int) (Math.random() * bestSolutions.size()));
+		return bestSolution2s.get((int) (Math.random() * bestSolution2s.size()));
 		
 	}
 	
@@ -371,14 +246,14 @@ public class AuctionAgent implements AuctionBehavior {
 	 * We generate all the neighbours by giving one task handled by v1 and giving it to v2
 	 */
 	
-	public List<Solution> changingVehicle(Solution A, Vehicle v1, Vehicle v2) {
+	public List<Solution2> changingVehicle(Solution2 A, Vehicle v1, Vehicle v2) {
 		
-		List<Solution> solutions = new ArrayList<Solution>();
+		List<Solution2> Solution2s = new ArrayList<Solution2>();
 		
 		//We can give any task of v1 to v2
 		for(int actionIndex = 0; actionIndex < A.actionsList.get(v1).size(); actionIndex++) {
 			
-			Solution A1 = new Solution(A);
+			Solution2 A1 = new Solution2(A);
 			
 			Action pickupAction = A.actionsList.get(v1).get(actionIndex);
 			
@@ -396,15 +271,15 @@ public class AuctionAgent implements AuctionBehavior {
 					// We have a '+1' because once the pickup is inserted, the size is increased.
 					for (int j = 0; j <= A1.actionsList.get(v2).size() + 1; j++) {
 						
-						Solution A_tmp = new Solution(A1);
+						Solution2 A_tmp = new Solution2(A1);
 						A_tmp.actionsList.get(v2).add(i, pickupAction);
 						A_tmp.actionsList.get(v2).add(j, deliveryAction);
 						A_tmp.computeCost();
 						
 						
-						// We only keep the plan if it satisfies the constraints and is better than the current solution
+						// We only keep the plan if it satisfies the constraints and is better than the current Solution2
 						if (A_tmp.verifyConstraints() && A_tmp.cost < A.cost) {
-							solutions.add(A_tmp);
+							Solution2s.add(A_tmp);
 						}
 					
 					}
@@ -415,7 +290,7 @@ public class AuctionAgent implements AuctionBehavior {
 			
 		}
 		
-		return solutions;
+		return Solution2s;
 		
 	}
 	
@@ -423,15 +298,15 @@ public class AuctionAgent implements AuctionBehavior {
 	/*
 	 * We exchange the order of two given tasks
 	 */
-	public List<Solution> changingTaskOrder(Solution A, Vehicle vi) {
+	public List<Solution2> changingTaskOrder(Solution2 A, Vehicle vi) {
 		
-		List<Solution> solutions = new ArrayList<Solution>();
+		List<Solution2> Solution2s = new ArrayList<Solution2>();
 		
 		for (Action a1 : A.actionsList.get(vi)) {
 			for (Action a2 : A.actionsList.get(vi)) {
 				if (!a1.equals(a2)) {
 					
-					Solution A_tmp = new Solution(A);
+					Solution2 A_tmp = new Solution2(A);
 					int indexT1 = A_tmp.actionsList.get(vi).indexOf(a1);
 					int indexT2 = A_tmp.actionsList.get(vi).indexOf(a2);
 					
@@ -449,22 +324,22 @@ public class AuctionAgent implements AuctionBehavior {
 					
 					A_tmp.computeCost();
 					
-					// We only keep the plan if it satisfies the constraints and is better than the current solution
+					// We only keep the plan if it satisfies the constraints and is better than the current Solution2
 					if (A_tmp.verifyConstraints() && A_tmp.cost < A.cost) {
-						solutions.add(A_tmp);
+						Solution2s.add(A_tmp);
 					}
 			
 				}
 			}
 		}
 		
-		return solutions;
+		return Solution2s;
 
 	}
 
 }
 
-class Solution {
+class Solution2 {
 
 	protected HashMap<Vehicle, List<Action>> actionsList; // Used to store the actions of each vehicle
 	protected Double cost;
@@ -472,7 +347,7 @@ class Solution {
 	public static List<Vehicle> vehicles;
 	public  List<Task> tasks;
 	
-	public Solution(List<Task> tasks) {
+	public Solution2(List<Task> tasks) {
 		this.tasks = tasks;
 		actionsList = new HashMap<Vehicle, List<Action>>();
 		for (Vehicle vehicle : vehicles) {
@@ -480,17 +355,17 @@ class Solution {
 		}
 	}
 
-	public Solution(Solution parentSolution) {
+	public Solution2(Solution2 parentSolution2) {
 		actionsList = new HashMap<Vehicle, List<Action>>();
 		for (Vehicle vehicle : vehicles) {
-			actionsList.put(vehicle, new ArrayList<Action>(parentSolution.actionsList.get(vehicle)));
+			actionsList.put(vehicle, new ArrayList<Action>(parentSolution2.actionsList.get(vehicle)));
 		}
 		computeCost();
-		tasks = new ArrayList<Task>(parentSolution.tasks);
+		tasks = new ArrayList<Task>(parentSolution2.tasks);
 	}
 
 	/*
-	 * Generate the plan for each vehicle for this solution
+	 * Generate the plan for each vehicle for this Solution2
 	 */
 	public List<Plan> getPlan() {
 
@@ -628,31 +503,31 @@ class Solution {
 	 
 }
 
-class Action {
-	
-	protected Task task;
-	protected String actionType;
-	protected City city;
-	
-	public Action(Task task, String type) {
-		this.task = task;
-		actionType = type;
-		if (actionType.equals("pickup")) {
-			city = this.task.pickupCity;
-		} else if (actionType.equals("delivery")) {
-			city = this.task.deliveryCity;
-		} else {
-			System.err.println("[Error] Attempt to create an action that is not a pickup nor a delivery action.");
-		}
-	}
-	
-	@Override
-	public String toString() {
-		return actionType + " Task" + task.id + " in " + city;
-	}
-	
-	public boolean equals(Object obj) {
-		Action action = (Action) obj;
-		return this.task.equals(action.task) && this.actionType.equals(action.actionType);
-	}
-}
+//class Action {
+//	
+//	protected Task task;
+//	protected String actionType;
+//	protected City city;
+//	
+//	public Action(Task task, String type) {
+//		this.task = task;
+//		actionType = type;
+//		if (actionType.equals("pickup")) {
+//			city = this.task.pickupCity;
+//		} else if (actionType.equals("delivery")) {
+//			city = this.task.deliveryCity;
+//		} else {
+//			System.err.println("[Error] Attempt to create an action that is not a pickup nor a delivery action.");
+//		}
+//	}
+//	
+//	@Override
+//	public String toString() {
+//		return actionType + " Task" + task.id + " in " + city;
+//	}
+//	
+//	public boolean equals(Object obj) {
+//		Action action = (Action) obj;
+//		return this.task.equals(action.task) && this.actionType.equals(action.actionType);
+//	}
+//}

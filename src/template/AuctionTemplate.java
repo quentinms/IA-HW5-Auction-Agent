@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.Random;
 
 import logist.Measures;
-import logist.behavior.AuctionBehavior;
 import logist.agent.Agent;
-import logist.simulation.Vehicle;
+import logist.behavior.AuctionBehavior;
 import logist.plan.Plan;
+import logist.simulation.Vehicle;
 import logist.task.Task;
 import logist.task.TaskDistribution;
 import logist.task.TaskSet;
@@ -81,7 +81,14 @@ public class AuctionTemplate implements AuctionBehavior {
 		plans.add(planVehicle1);
 		while (plans.size() < vehicles.size())
 			plans.add(Plan.EMPTY);
-
+		
+		double income = 0;
+		for(Task t: tasks){
+			income += t.reward;
+		}
+		
+		System.out.println("Random: "+(income - planVehicle1.totalDistance()*vehicle.costPerKm()));
+		
 		return plans;
 	}
 
