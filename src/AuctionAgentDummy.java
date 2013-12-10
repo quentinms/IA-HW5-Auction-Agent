@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Random;
 
 import logist.agent.Agent;
 import logist.behavior.AuctionBehavior;
@@ -32,6 +33,8 @@ public class AuctionAgentDummy implements AuctionBehavior {
 	private List<Task> tasks;
 	private Solution2 currentPlans;
 	private Solution2 futurePlans;
+	
+	private static String DUMB_TYPE = "Marginal";
 	
 	@Override
 	public void setup(Topology topology, TaskDistribution distribution, Agent agent) {
@@ -67,6 +70,7 @@ public class AuctionAgentDummy implements AuctionBehavior {
 	@Override
 	public Long askPrice(Task task) {
 
+		if(DUMB_TYPE.equals("Marginal")){
 		ArrayList<Task> futureTasks = new ArrayList<Task>(tasks);
 		futureTasks.add(task);
 		
@@ -80,10 +84,16 @@ public class AuctionAgentDummy implements AuctionBehavior {
 			}
 		}
 		
+		
 		double marginalCost = futurePlans.cost - currentPlans.cost;
 				
 		
 		return Math.max(0, Math.round(marginalCost));
+		} else if(DUMB_TYPE.equals("Random")){
+			return Math.round(Math.random()*5000);
+		} else {
+			return 0l;
+		}
 		
 	}
 	
@@ -102,7 +112,7 @@ public class AuctionAgentDummy implements AuctionBehavior {
 			income += t.reward;
 		}
 		Solution2 sol = centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8);
-		for (int iter = 0; iter < 20; iter++){
+		for (int iter = 0; iter < 50; iter++){
 			Solution2 plan = centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8);
 			if(plan.cost < sol.cost){
 				sol = plan;
@@ -110,7 +120,7 @@ public class AuctionAgentDummy implements AuctionBehavior {
 		}
 		
 		
-		System.out.println("Dummy: "+(income - sol.cost));
+		System.out.println("************** \tDummy: "+(income - sol.cost));
 		
 		return sol.getPlan();
 	}
