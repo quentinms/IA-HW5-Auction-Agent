@@ -1,6 +1,4 @@
 
-
-//the list of imports
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -18,36 +16,30 @@ import logist.topology.Topology;
 import logist.topology.Topology.City;
 
 /**
- * A very simple auction agent that assigns all tasks to its first vehicle and
- * handles them sequentially.
+ * The auction agent.
  */
 @SuppressWarnings("unused")
 public class AuctionAgent implements AuctionBehavior {
 
-	private final static int LOOP_NUMBER = 500;
 	private final static double BID_RATIO = 9./10.;
 	private final static double MARGINAL_COST_RATIO = 2./3.;
-//	private final static long TIMEOUT_BID = logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.BID) - 30*1000; // 30s margin
-//	private final static long TIMEOUT_PLAN = logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.PLAN) - 30*1000; // 30s margin
+//	private final static long TIMEOUT_BID = logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.BID) - logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.BID) / 10; // 10% margin
+//	private final static long TIMEOUT_PLAN = logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.PLAN) - logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.PLAN) / 10; // 10% margin
 	private final static long TIMEOUT_BID = 1 * 1000;
 	private final static long TIMEOUT_PLAN = 1 * 1000;
-	private final static long PROGRAM_TIMESTART = System.currentTimeMillis();
+	private final static double FUTURE_TASK_THRESHOLD = 0.20;
 	
 	private Topology topology;
 	private TaskDistribution distribution;
 	private Agent agent;
-	//private Random random;
 	private List<Vehicle> vehicles;
 	private List<Task> tasks;
 	private Solution currentPlans;
 	private Solution futurePlans;
-	//private City currentCity;
 	private HashMap<Integer, ArrayList<Task>> attributions = new HashMap<Integer, ArrayList<Task>>();
 	private long estimatedBid; // estimation of others' marginal cost
 	private double bias;
 	private double taskBiasCount = 1;
-	
-	double FUTURE_TASK_THRESHOLD = 0.20;
 	
 	
 	@Override
@@ -70,94 +62,62 @@ public class AuctionAgent implements AuctionBehavior {
 		futurePlans.cost = Double.POSITIVE_INFINITY;
 		
 		bias = 0;
-		
-//		System.out.println("Timestart: " + TIMESTART);
-//		System.out.println("Logist timeout: " + logist.LogistSettings().get(logist.LogistSettings.TimeoutKey.BID));
-//		System.out.println("Logist timeout: " + TIMEOUT_BID);
-	
-		//this.currentCity = vehicle.homeCity();
 
-		/*long seed = -9019554669489983951L * currentCity.hashCode() * agent.id();
-		this.random = new Random(seed);*/
 	}
 
 	@Override
 	public void auctionResult(Task previous, int winner, Long[] bids) {
 		
-		
 		double minOwnPickupDistance = Double.POSITIVE_INFINITY;
 		double minOwnDeliveryDistance = Double.POSITIVE_INFINITY;
 		for (Task ownTask : tasks) {
 			double distanceDeliveryToPickup   = ownTask.deliveryCity.distanceTo(previous.pickupCity);
-//			System.out.println("\townDistanceDeliveryToPickup = " + distanceDeliveryToPickup);
 			minOwnPickupDistance = Math.min(minOwnPickupDistance, distanceDeliveryToPickup);
 			double distancePickupToDelivery   = ownTask.pickupCity.distanceTo(previous.deliveryCity);
-//			System.out.println("\townDistancePickupToDelivery = " + distancePickupToDelivery);
 			minOwnDeliveryDistance = Math.min(minOwnDeliveryDistance, distancePickupToDelivery);
 			double distancePickupToPickup     = ownTask.pickupCity.distanceTo(previous.pickupCity);
-//			System.out.println("\townDistancePickupToPickup = " + distancePickupToPickup);
 			minOwnPickupDistance = Math.min(minOwnPickupDistance, distancePickupToPickup);
 			double distanceDeliveryToDelivery = ownTask.deliveryCity.distanceTo(previous.deliveryCity);
-//			System.out.println("\townDistanceDeliveryToDelivery = " + distanceDeliveryToDelivery);
 			minOwnDeliveryDistance = Math.min(minOwnDeliveryDistance, distanceDeliveryToDelivery);
 		}
 		
 		System.out.println("***********************************");
 		System.out.println("Task " + previous.id + "   Winner:" + winner + " for " + bids[winner]);
-		System.out.println(Arrays.toString(bids));
 		
 		if (winner == agent.id()) {
 			this.tasks.add(previous);
-			//this.futurePlans.tasks = this.tasks;
 			this.currentPlans = this.futurePlans;
 		}
 		
-		
 		System.out.println("estimatedBid: " + estimatedBid);
-		System.out.println("estimatedBid (w/o bias): " + (estimatedBid + Math.round(bias/((double) (taskBiasCount)))));
-		
-//		System.out.println("bias/(taskBiasCount + 1): " + bias/(taskBiasCount + 1));
-//		System.out.println("bias/(1.0 * (taskBiasCount + 1)): " + bias/(1.0 * (taskBiasCount + 1)));
-//		System.out.println("bias/((double) (taskBiasCount + 1)): " + bias/((double) (taskBiasCount + 1)));
-		
-		System.out.println("actual bid: " + bids[0]);
+		System.out.println("estimatedBid (without bias): " + (estimatedBid + Math.round(bias/((double) (taskBiasCount)))));
+		System.out.println("Actual bid: " + bids[0]);
 		System.out.println("*Difference: " + (estimatedBid - bids[0]));
-		
-		
 		
 		double minConcurrentPickupDistance = Double.POSITIVE_INFINITY;
 		double minConcurrentDeliveryDistance = Double.POSITIVE_INFINITY;
 		for (List<Task> concurrentTasks : attributions.values()) {			
 			for (Task concurrentTask : concurrentTasks) {
 				double distanceDeliveryToPickup   = concurrentTask.deliveryCity.distanceTo(previous.pickupCity);
-//				System.out.println("\tconcurrentDistanceDeliveryToPickup = " + distanceDeliveryToPickup);
 				minConcurrentPickupDistance = Math.min(minConcurrentPickupDistance, distanceDeliveryToPickup);
 				double distancePickupToDelivery   = concurrentTask.pickupCity.distanceTo(previous.deliveryCity);
-//				System.out.println("\tconcurrentDistancePickupToDelivery = " + distancePickupToDelivery);
 				minConcurrentDeliveryDistance = Math.min(minConcurrentDeliveryDistance, distancePickupToDelivery);
 				double distancePickupToPickup     = concurrentTask.pickupCity.distanceTo(previous.pickupCity);
-//				System.out.println("\tconcurrentDistancePickupToPickup = " + distancePickupToPickup);
 				minConcurrentPickupDistance = Math.min(minConcurrentPickupDistance, distancePickupToPickup);
 				double distanceDeliveryToDelivery = concurrentTask.deliveryCity.distanceTo(previous.deliveryCity);
-//				System.out.println("\tconcurrentDistanceDeliveryToDelivery = " + distanceDeliveryToDelivery);
 				minConcurrentDeliveryDistance = Math.min(minConcurrentDeliveryDistance, distanceDeliveryToDelivery);
 			}
 		}
-		
 		
 		for (Vehicle vehicle : vehicles) {
 			minOwnDeliveryDistance = Math.min(minOwnPickupDistance, vehicle.homeCity().distanceTo(previous.deliveryCity));
 			minOwnPickupDistance = Math.min(minOwnPickupDistance, vehicle.homeCity().distanceTo(previous.pickupCity));
 		}
 		
+		System.out.println("Distance concurrent: " + (minConcurrentPickupDistance + minConcurrentDeliveryDistance));
+		System.out.println("Distance us: " + (minOwnPickupDistance + minOwnDeliveryDistance));
 		
-		
-		System.out.println("Distance T: " + (minConcurrentPickupDistance + minConcurrentDeliveryDistance));
-		System.out.println("Distance U: " + (minOwnPickupDistance + minOwnDeliveryDistance));
-		
-		
-		
-//		if(Math.abs(estimatedBid - bids[0]) > 500){
+//		if (Math.abs(estimatedBid - bids[0]) > 500) {
 //			bias = bias + 0.9 * (estimatedBid - bids[0]);
 //			taskBiasCount = taskBiasCount + 0.9;
 //		} else {
@@ -165,15 +125,6 @@ public class AuctionAgent implements AuctionBehavior {
 			taskBiasCount++;
 //		}
 	
-	
-	
-//		bias += bids[0];
-//		taskBiasCount++;
-		
-		
-		
-		
-		
 		if (attributions.get(winner) == null) {
 			ArrayList<Task> tasksList = new ArrayList<Task>();
 			tasksList.add(previous);
@@ -194,7 +145,6 @@ public class AuctionAgent implements AuctionBehavior {
 		
 		Double minCost = Double.POSITIVE_INFINITY;
 		
-//		for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID * 1./3.; i++) {
 		while (System.currentTimeMillis() < timestart + TIMEOUT_BID * 1./3.) {
 			Solution plan = centralizedPlan(vehicles, futureTasks, 0.8);
 			if (plan.cost < minCost) {
@@ -205,60 +155,45 @@ public class AuctionAgent implements AuctionBehavior {
 		
 		double marginalCost = futurePlans.cost - currentPlans.cost;
 		
-		
 		/* Estimating the opponent's bid */
 		ArrayList<Task> futureAttributions;
 		if (attributions.get(0) == null) {
+			
 			futureAttributions = new ArrayList<Task>();
-		} else {
-			futureAttributions = new ArrayList<Task>(attributions.get(0));
-		}
-		futureAttributions.add(task);
-		
-		
-		if (attributions.get(0) == null) {
+			futureAttributions.add(task);
 			
 			Double minCostAdv = Double.POSITIVE_INFINITY;
-//			timestart = System.currentTimeMillis();
-//			for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3.; i++) {
-			while (System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3.) {
+			while (System.currentTimeMillis() < timestart + TIMEOUT_BID) {
 				Solution plan = centralizedPlan(vehicles, futureTasks, 0.8);
 				minCostAdv = Math.min(minCostAdv, plan.cost);
 			}
 			estimatedBid = Math.round(minCostAdv);
-			 
+			
 		} else {
 			
+			futureAttributions = new ArrayList<Task>(attributions.get(0));
+			futureAttributions.add(task);
+			
 			Double minCostAdv1 = Double.POSITIVE_INFINITY;
-//			for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3.; i++) {
 			while (System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3.) {
 				Solution plan = centralizedPlan(vehicles, futureAttributions, 0.8);
 				minCostAdv1 = Math.min(minCostAdv1, plan.cost);
-//				System.out.println("So far (1): " + (System.currentTimeMillis() - timestart));
 			}
 			
 			Double minCostAdv2 = Double.POSITIVE_INFINITY;
-//			for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID; i++) {
 			while (System.currentTimeMillis() < timestart + TIMEOUT_BID) {
 				Solution plan = centralizedPlan(vehicles, attributions.get(0), 0.8);
 				minCostAdv2 = Math.min(minCostAdv2, plan.cost);
-//				System.out.println("So far (2): " + (System.currentTimeMillis() - timestart));
-//				System.out.println("Now − (timestart + timeoutbid): " + (System.currentTimeMillis() - timestart - TIMEOUT_BID));
-//				System.out.println("Now < timestart + timeoutbid:." + (System.currentTimeMillis() < timestart + TIMEOUT_BID));
 			}
 			
 			estimatedBid = Math.round(minCostAdv1 - minCostAdv2);
 			
 		}
 		
-		estimatedBid = estimatedBid - Math.round(bias/(1.0 * (taskBiasCount + 1)));
-		
-		//estimatedBid = Math.round(0.2*estimatedBid + 0.8*(bias/taskBiasCount));
+		estimatedBid = estimatedBid - Math.round(bias/((double) (taskBiasCount + 1)));
 		
 		//We suppose that the other agent does not bid negatives
 		estimatedBid = Math.max(estimatedBid, 0);
-		
-		
 		
 		/* Factor for the asking price*/
 		/*if (marginalCost > 0) {
@@ -268,47 +203,57 @@ public class AuctionAgent implements AuctionBehavior {
 		}*/
 		
 		System.out.println("askPrice() took: " + (System.currentTimeMillis() - timestart));
+		
 		if (tasks.size() <= 1) {
 			return Math.round(marginalCost * MARGINAL_COST_RATIO);
 		}
 		
-		int futureInterestingTasks = taskDistrib(task.pickupCity, task.deliveryCity);
+		int futureInterestingTasks = futureInterestingTasks(task.pickupCity, task.deliveryCity);
 		
-		System.out.println("Task " + task.id + " : " + marginalCost + " - " + estimatedBid);
-		//if (marginalCost > 0){
-		return Math.round(Math.max(marginalCost - futureInterestingTasks*marginalCost/20, estimatedBid*9.0/10 - futureInterestingTasks*estimatedBid/20));
-//		} else {
-//			return Math.max(Math.round(estimatedBid * BID_RATIO), 0);//Math.round(marginalCost);
-//		}
+		System.out.println("Task " + task.id + ": marginalCost = " + marginalCost + ", estimatedBid = " + estimatedBid);
+
+		double percentage = 0.05;
+		return Math.round(Math.max(marginalCost - futureInterestingTasks * marginalCost * percentage,
+				estimatedBid * BID_RATIO - futureInterestingTasks * estimatedBid * percentage));
 		
 	}
 	
-	
-	private int taskDistrib(City start, City end){
+	/**
+	 * This function returns the number of interesting tasks on the path
+	 * from one start city to one destination city.
+	 * An interesting task is a task which pickup and destination city are
+	 * on the path and which has an apparition probability greater than some
+	 * constant (FUTURE_TASK_THRESHOLD).
+	 * @param start the starting city
+	 * @param end the destination city
+	 * @return the number of future “interesting tasks”
+	 */
+	private int futureInterestingTasks(City start, City end) {
 			
-			int interestingFutureTasks = 0;
+		int interestingFutureTasks = 0;
 			
-			List<City> path = start.pathTo(end);
-			for(int i = 0; i < path.size()-1; i++ ){
-				City pickup = path.get(i);
+		List<City> path = start.pathTo(end);
+		for (int i = 0; i < path.size() - 1; i++) {
+			City pickup = path.get(i);
+			
+			for (int j = i + 1; j < path.size(); j++) {
+				City delivery = path.get(j);
 				
-				for(int j = i + 1; j < path.size(); j++){
-					City delivery = path.get(j);
-					
-					if(distribution.probability(pickup, delivery) > FUTURE_TASK_THRESHOLD){
-						interestingFutureTasks++;
-					}
-					
+				if (distribution.probability(pickup, delivery) > FUTURE_TASK_THRESHOLD) {
+					interestingFutureTasks++;
 				}
+				
 			}
+		}
 				
 		return interestingFutureTasks;
+		
 	}
 	/**
 	 * A function to have an estimation of our competing advantage for the
 	 * considered task.
-	 * @param task
-	 * @return
+	 * @param task some task
+	 * @return a factor
 	 */
 	private double estimateFactor(Task task) {
 		
@@ -357,9 +302,6 @@ public class AuctionAgent implements AuctionBehavior {
 			advantage = minConcurrentDistance / minOwnDistance;
 			if (advantage < 1) advantage = 1;
 		}
-//		System.out.println("minOwnDistance = " + minOwnDistance);
-//		System.out.println("minConcurrentDistance = " + minConcurrentDistance);
-//		System.out.println("Yay our advantage is: (wait for it) " + advantage);
 		
 		return advantage;
 	}
@@ -369,35 +311,20 @@ public class AuctionAgent implements AuctionBehavior {
 		
 		long timestart = System.currentTimeMillis();
 		
-//		System.out.println(tasks);
-//		System.out.println(currentPlans.tasks);
-//		System.out.println(attributions);
-		//TODO pourquoi ça marche pas
-		//TODO la dernière tâche a comme cout un cout autour de 62k au lieu de 344,
-		//ce qui semble être le cout initial de la tâche avant la sous-enchère, càd
-		//que le cout n'a pas été mis à jour.
-//		return currentPlans.getPlan();
-		
 		double income = 0;
 		for (Task task : tasks) {
 			income += task.reward;
 		}
 		
 		Solution sol = centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8);
-//		for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_PLAN; i++) {
 		while (System.currentTimeMillis() < timestart + TIMEOUT_PLAN) {
 			Solution plan = centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8);
 			if (plan.cost < sol.cost) {
 				sol = plan;
 			}
-//			System.out.println("Time elapsed since beginning of the function: " + (System.currentTimeMillis() - timestart));
-//			System.out.println("Now: " + System.currentTimeMillis() + ", timestart: " + timestart + ", timeout: " + TIMEOUT_PLAN);
-//			System.out.println("System.currentTimeMillis() < timestart + TIMEOUT_PLAN: " + (System.currentTimeMillis() < timestart + TIMEOUT_PLAN));
 		}
 		
-		
 		System.out.println("************** \tAgent: " + (income - sol.cost));
-		
 		
 		return sol.getPlan();
 	}
@@ -409,7 +336,7 @@ public class AuctionAgent implements AuctionBehavior {
 		Solution Aold = new Solution(tasks);
 		Aold.cost = Double.POSITIVE_INFINITY;
 		
-		//The biggest vehicle handles tasks sequentially
+		// The biggest vehicle handles tasks sequentially
 		Solution A = selectInitialSolution(vehicles, tasks);
 		
 		if (!A.verifyConstraints()) {
@@ -432,12 +359,11 @@ public class AuctionAgent implements AuctionBehavior {
 			
 			//Select the best solution among the neighbours (and the current solution)
 			if (Math.random() < p) {
-			A = localChoice(N);
+				A = localChoice(N);
 			} else {
 				A = N.get((int) Math.random() * N.size());
 			}
 			
-			//System.out.println("[Info] Iter " + count + " : " + A.cost);
 			count++;
 		}
 		
