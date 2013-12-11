@@ -34,7 +34,7 @@ public class AuctionAgentDummy implements AuctionBehavior {
 	private Solution2 currentPlans;
 	private Solution2 futurePlans;
 	
-	private static String DUMB_TYPE = "Marginal";
+	private static String DUMB_TYPE = "Random";
 	
 	@Override
 	public void setup(Topology topology, TaskDistribution distribution, Agent agent) {

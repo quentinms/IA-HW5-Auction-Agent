@@ -25,8 +25,8 @@ public class AuctionAgent implements AuctionBehavior {
 	private final static double MARGINAL_COST_RATIO = 2./3.;
 //	private final static long TIMEOUT_BID = logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.BID) - logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.BID) / 10; // 10% margin
 //	private final static long TIMEOUT_PLAN = logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.PLAN) - logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.PLAN) / 10; // 10% margin
-	private final static long TIMEOUT_BID = 1 * 1000;
-	private final static long TIMEOUT_PLAN = 1 * 1000;
+	private final static long TIMEOUT_BID = 5 * 1000;
+	private final static long TIMEOUT_PLAN = 5 * 1000;
 	private final static double FUTURE_TASK_THRESHOLD = 0.20;
 	
 	private Topology topology;
@@ -38,8 +38,10 @@ public class AuctionAgent implements AuctionBehavior {
 	private Solution futurePlans;
 	private HashMap<Integer, ArrayList<Task>> attributions = new HashMap<Integer, ArrayList<Task>>();
 	private long estimatedBid; // estimation of others' marginal cost
-	private double bias;
+	private double bias = 0;
+	private double difference = 0;
 	private double taskBiasCount = 1;
+	private int opponentID = -1;
 	
 	
 	@Override
@@ -60,13 +62,15 @@ public class AuctionAgent implements AuctionBehavior {
 		currentPlans.cost = 0.0;
 		futurePlans = new Solution(new ArrayList<Task>());
 		futurePlans.cost = Double.POSITIVE_INFINITY;
-		
-		bias = 0;
 
 	}
 
 	@Override
 	public void auctionResult(Task previous, int winner, Long[] bids) {
+		
+		if (opponentID < 0) {
+			opponentID = (bids.length - 1) ^ agent.id(); // Only if there are only two agents
+		}
 		
 		double minOwnPickupDistance = Double.POSITIVE_INFINITY;
 		double minOwnDeliveryDistance = Double.POSITIVE_INFINITY;
@@ -90,22 +94,22 @@ public class AuctionAgent implements AuctionBehavior {
 		}
 		
 		System.out.println("estimatedBid: " + estimatedBid);
-		System.out.println("estimatedBid (without bias): " + (estimatedBid + Math.round(bias/((double) (taskBiasCount)))));
-		System.out.println("Actual bid: " + bids[0]);
-		System.out.println("*Difference: " + (estimatedBid - bids[0]));
+		System.out.println("estimatedBid (without bias): " + (estimatedBid + Math.round(bias)));
+		System.out.println("Actual bid: " + bids[opponentID]);
+		System.out.println("*Difference: " + (estimatedBid - bids[opponentID]));
 		
-		double minConcurrentPickupDistance = Double.POSITIVE_INFINITY;
-		double minConcurrentDeliveryDistance = Double.POSITIVE_INFINITY;
-		for (List<Task> concurrentTasks : attributions.values()) {			
-			for (Task concurrentTask : concurrentTasks) {
-				double distanceDeliveryToPickup   = concurrentTask.deliveryCity.distanceTo(previous.pickupCity);
-				minConcurrentPickupDistance = Math.min(minConcurrentPickupDistance, distanceDeliveryToPickup);
-				double distancePickupToDelivery   = concurrentTask.pickupCity.distanceTo(previous.deliveryCity);
-				minConcurrentDeliveryDistance = Math.min(minConcurrentDeliveryDistance, distancePickupToDelivery);
-				double distancePickupToPickup     = concurrentTask.pickupCity.distanceTo(previous.pickupCity);
-				minConcurrentPickupDistance = Math.min(minConcurrentPickupDistance, distancePickupToPickup);
-				double distanceDeliveryToDelivery = concurrentTask.deliveryCity.distanceTo(previous.deliveryCity);
-				minConcurrentDeliveryDistance = Math.min(minConcurrentDeliveryDistance, distanceDeliveryToDelivery);
+		double minOpponentPickupDistance = Double.POSITIVE_INFINITY;
+		double minOpponentDeliveryDistance = Double.POSITIVE_INFINITY;
+		for (List<Task> opponentTasks : attributions.values()) {			
+			for (Task opponentTask : opponentTasks) {
+				double distanceDeliveryToPickup   = opponentTask.deliveryCity.distanceTo(previous.pickupCity);
+				minOpponentPickupDistance = Math.min(minOpponentPickupDistance, distanceDeliveryToPickup);
+				double distancePickupToDelivery   = opponentTask.pickupCity.distanceTo(previous.deliveryCity);
+				minOpponentDeliveryDistance = Math.min(minOpponentDeliveryDistance, distancePickupToDelivery);
+				double distancePickupToPickup     = opponentTask.pickupCity.distanceTo(previous.pickupCity);
+				minOpponentPickupDistance = Math.min(minOpponentPickupDistance, distancePickupToPickup);
+				double distanceDeliveryToDelivery = opponentTask.deliveryCity.distanceTo(previous.deliveryCity);
+				minOpponentDeliveryDistance = Math.min(minOpponentDeliveryDistance, distanceDeliveryToDelivery);
 			}
 		}
 		
@@ -114,16 +118,17 @@ public class AuctionAgent implements AuctionBehavior {
 			minOwnPickupDistance = Math.min(minOwnPickupDistance, vehicle.homeCity().distanceTo(previous.pickupCity));
 		}
 		
-		System.out.println("Distance concurrent: " + (minConcurrentPickupDistance + minConcurrentDeliveryDistance));
+		System.out.println("Distance opponent: " + (minOpponentPickupDistance + minOpponentDeliveryDistance));
 		System.out.println("Distance us: " + (minOwnPickupDistance + minOwnDeliveryDistance));
 		
 //		if (Math.abs(estimatedBid - bids[0]) > 500) {
-//			bias = bias + 0.9 * (estimatedBid - bids[0]);
+//			difference = difference + 0.9 * (estimatedBid - bids[0]);
 //			taskBiasCount = taskBiasCount + 0.9;
 //		} else {
-			bias += (estimatedBid - bids[0]);
+			difference += (estimatedBid - bids[opponentID]);
 			taskBiasCount++;
 //		}
+		bias = difference / ((double) taskBiasCount);
 	
 		if (attributions.get(winner) == null) {
 			ArrayList<Task> tasksList = new ArrayList<Task>();
@@ -157,7 +162,7 @@ public class AuctionAgent implements AuctionBehavior {
 		
 		/* Estimating the opponent's bid */
 		ArrayList<Task> futureAttributions;
-		if (attributions.get(0) == null) {
+		if (attributions.get(opponentID) == null) {
 			
 			futureAttributions = new ArrayList<Task>();
 			futureAttributions.add(task);
@@ -171,26 +176,26 @@ public class AuctionAgent implements AuctionBehavior {
 			
 		} else {
 			
-			futureAttributions = new ArrayList<Task>(attributions.get(0));
+			futureAttributions = new ArrayList<Task>(attributions.get(opponentID));
 			futureAttributions.add(task);
 			
-			Double minCostAdv1 = Double.POSITIVE_INFINITY;
+			Double futureOpponentMinCost = Double.POSITIVE_INFINITY;
 			while (System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3.) {
 				Solution plan = centralizedPlan(vehicles, futureAttributions, 0.8);
-				minCostAdv1 = Math.min(minCostAdv1, plan.cost);
+				futureOpponentMinCost = Math.min(futureOpponentMinCost, plan.cost);
 			}
 			
-			Double minCostAdv2 = Double.POSITIVE_INFINITY;
+			Double currentOpponentMinCost = Double.POSITIVE_INFINITY;
 			while (System.currentTimeMillis() < timestart + TIMEOUT_BID) {
-				Solution plan = centralizedPlan(vehicles, attributions.get(0), 0.8);
-				minCostAdv2 = Math.min(minCostAdv2, plan.cost);
+				Solution plan = centralizedPlan(vehicles, attributions.get(opponentID), 0.8);
+				currentOpponentMinCost = Math.min(currentOpponentMinCost, plan.cost);
 			}
 			
-			estimatedBid = Math.round(minCostAdv1 - minCostAdv2);
+			estimatedBid = Math.round(futureOpponentMinCost - currentOpponentMinCost);
 			
 		}
 		
-		estimatedBid = estimatedBid - Math.round(bias/((double) (taskBiasCount + 1)));
+		estimatedBid = estimatedBid - Math.round(bias);
 		
 		//We suppose that the other agent does not bid negatives
 		estimatedBid = Math.max(estimatedBid, 0);
@@ -279,27 +284,27 @@ public class AuctionAgent implements AuctionBehavior {
 		/**
 		 * The distance between any concurrent closest's vehicle and the considered task.
 		 */
-		double minConcurrentDistance = Double.POSITIVE_INFINITY;
-		for (List<Task> concurrentTasks : attributions.values()) {			
-			for (Task concurrentTask : concurrentTasks) {
-				double distanceDeliveryToPickup   = concurrentTask.deliveryCity.distanceTo(task.pickupCity);
+		double minOpponentDistance = Double.POSITIVE_INFINITY;
+		for (List<Task> opponentTasks : attributions.values()) {			
+			for (Task opponentTask : opponentTasks) {
+				double distanceDeliveryToPickup   = opponentTask.deliveryCity.distanceTo(task.pickupCity);
 //				System.out.println("\tconcurrentDistanceDeliveryToPickup = " + distanceDeliveryToPickup);
-				minConcurrentDistance = Math.min(minConcurrentDistance, distanceDeliveryToPickup);
-				double distancePickupToDelivery   = concurrentTask.pickupCity.distanceTo(task.deliveryCity);
+				minOpponentDistance = Math.min(minOpponentDistance, distanceDeliveryToPickup);
+				double distancePickupToDelivery   = opponentTask.pickupCity.distanceTo(task.deliveryCity);
 //				System.out.println("\tconcurrentDistancePickupToDelivery = " + distancePickupToDelivery);
-				minConcurrentDistance = Math.min(minConcurrentDistance, distancePickupToDelivery);
-				double distancePickupToPickup     = concurrentTask.pickupCity.distanceTo(task.pickupCity);
+				minOpponentDistance = Math.min(minOpponentDistance, distancePickupToDelivery);
+				double distancePickupToPickup     = opponentTask.pickupCity.distanceTo(task.pickupCity);
 //				System.out.println("\tconcurrentDistancePickupToPickup = " + distancePickupToPickup);
-				minConcurrentDistance = Math.min(minConcurrentDistance, distancePickupToPickup);
-				double distanceDeliveryToDelivery = concurrentTask.deliveryCity.distanceTo(task.deliveryCity);
+				minOpponentDistance = Math.min(minOpponentDistance, distancePickupToPickup);
+				double distanceDeliveryToDelivery = opponentTask.deliveryCity.distanceTo(task.deliveryCity);
 //				System.out.println("\tconcurrentDistanceDeliveryToDelivery = " + distanceDeliveryToDelivery);
-				minConcurrentDistance = Math.min(minConcurrentDistance, distanceDeliveryToDelivery);
+				minOpponentDistance = Math.min(minOpponentDistance, distanceDeliveryToDelivery);
 			}
 		}
 		
 		double advantage = 1;
-		if (!(minOwnDistance == Double.POSITIVE_INFINITY || minConcurrentDistance == 0)) {
-			advantage = minConcurrentDistance / minOwnDistance;
+		if (!(minOwnDistance == Double.POSITIVE_INFINITY || minOpponentDistance == 0)) {
+			advantage = minOpponentDistance / minOwnDistance;
 			if (advantage < 1) advantage = 1;
 		}
 		
