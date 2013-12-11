@@ -98,36 +98,8 @@ public class AuctionAgent implements AuctionBehavior {
 		System.out.println("Actual bid: " + bids[opponentID]);
 		System.out.println("*Difference: " + (estimatedBid - bids[opponentID]));
 		
-		double minOpponentPickupDistance = Double.POSITIVE_INFINITY;
-		double minOpponentDeliveryDistance = Double.POSITIVE_INFINITY;
-		for (List<Task> opponentTasks : attributions.values()) {			
-			for (Task opponentTask : opponentTasks) {
-				double distanceDeliveryToPickup   = opponentTask.deliveryCity.distanceTo(previous.pickupCity);
-				minOpponentPickupDistance = Math.min(minOpponentPickupDistance, distanceDeliveryToPickup);
-				double distancePickupToDelivery   = opponentTask.pickupCity.distanceTo(previous.deliveryCity);
-				minOpponentDeliveryDistance = Math.min(minOpponentDeliveryDistance, distancePickupToDelivery);
-				double distancePickupToPickup     = opponentTask.pickupCity.distanceTo(previous.pickupCity);
-				minOpponentPickupDistance = Math.min(minOpponentPickupDistance, distancePickupToPickup);
-				double distanceDeliveryToDelivery = opponentTask.deliveryCity.distanceTo(previous.deliveryCity);
-				minOpponentDeliveryDistance = Math.min(minOpponentDeliveryDistance, distanceDeliveryToDelivery);
-			}
-		}
-		
-		for (Vehicle vehicle : vehicles) {
-			minOwnDeliveryDistance = Math.min(minOwnPickupDistance, vehicle.homeCity().distanceTo(previous.deliveryCity));
-			minOwnPickupDistance = Math.min(minOwnPickupDistance, vehicle.homeCity().distanceTo(previous.pickupCity));
-		}
-		
-		System.out.println("Distance opponent: " + (minOpponentPickupDistance + minOpponentDeliveryDistance));
-		System.out.println("Distance us: " + (minOwnPickupDistance + minOwnDeliveryDistance));
-		
-//		if (Math.abs(estimatedBid - bids[0]) > 500) {
-//			difference = difference + 0.9 * (estimatedBid - bids[0]);
-//			taskBiasCount = taskBiasCount + 0.9;
-//		} else {
-			difference += (estimatedBid - bids[opponentID]);
-			taskBiasCount++;
-//		}
+		difference += (estimatedBid - bids[opponentID]);
+		taskBiasCount++;
 		bias = difference / ((double) taskBiasCount);
 	
 		if (attributions.get(winner) == null) {
@@ -200,15 +172,6 @@ public class AuctionAgent implements AuctionBehavior {
 		//We suppose that the other agent does not bid negatives
 		estimatedBid = Math.max(estimatedBid, 0);
 		
-		/* Factor for the asking price*/
-		/*if (marginalCost > 0) {
-			double factor = estimateFactor(task);
-			double percentage = 1;//.05;
-			double cost = Math.min(marginalCost, percentage * factor * marginalCost);
-		}*/
-		
-		System.out.println("askPrice() took: " + (System.currentTimeMillis() - timestart));
-		
 		if (tasks.size() <= 1) {
 			return Math.round(marginalCost * MARGINAL_COST_RATIO);
 		}
@@ -239,76 +202,19 @@ public class AuctionAgent implements AuctionBehavior {
 			
 		List<City> path = start.pathTo(end);
 		for (int i = 0; i < path.size() - 1; i++) {
-			City pickup = path.get(i);
 			
+			City pickup = path.get(i);
 			for (int j = i + 1; j < path.size(); j++) {
 				City delivery = path.get(j);
-				
 				if (distribution.probability(pickup, delivery) > FUTURE_TASK_THRESHOLD) {
 					interestingFutureTasks++;
 				}
-				
 			}
+			
 		}
 				
 		return interestingFutureTasks;
 		
-	}
-	/**
-	 * A function to have an estimation of our competing advantage for the
-	 * considered task.
-	 * @param task some task
-	 * @return a factor
-	 */
-	private double estimateFactor(Task task) {
-		
-		/**
-		 * The distance between our closest vehicle and the considered task.
-		 */
-		double minOwnDistance = Double.POSITIVE_INFINITY;
-		for (Task ownTask : tasks) {
-			double distanceDeliveryToPickup   = ownTask.deliveryCity.distanceTo(task.pickupCity);
-//			System.out.println("\townDistanceDeliveryToPickup = " + distanceDeliveryToPickup);
-			minOwnDistance = Math.min(minOwnDistance, distanceDeliveryToPickup);
-			double distancePickupToDelivery   = ownTask.pickupCity.distanceTo(task.deliveryCity);
-//			System.out.println("\townDistancePickupToDelivery = " + distancePickupToDelivery);
-			minOwnDistance = Math.min(minOwnDistance, distancePickupToDelivery);
-			double distancePickupToPickup     = ownTask.pickupCity.distanceTo(task.pickupCity);
-//			System.out.println("\townDistancePickupToPickup = " + distancePickupToPickup);
-			minOwnDistance = Math.min(minOwnDistance, distancePickupToPickup);
-			double distanceDeliveryToDelivery = ownTask.deliveryCity.distanceTo(task.deliveryCity);
-//			System.out.println("\townDistanceDeliveryToDelivery = " + distanceDeliveryToDelivery);
-			minOwnDistance = Math.min(minOwnDistance, distanceDeliveryToDelivery);
-		}
-		
-		/**
-		 * The distance between any concurrent closest's vehicle and the considered task.
-		 */
-		double minOpponentDistance = Double.POSITIVE_INFINITY;
-		for (List<Task> opponentTasks : attributions.values()) {			
-			for (Task opponentTask : opponentTasks) {
-				double distanceDeliveryToPickup   = opponentTask.deliveryCity.distanceTo(task.pickupCity);
-//				System.out.println("\tconcurrentDistanceDeliveryToPickup = " + distanceDeliveryToPickup);
-				minOpponentDistance = Math.min(minOpponentDistance, distanceDeliveryToPickup);
-				double distancePickupToDelivery   = opponentTask.pickupCity.distanceTo(task.deliveryCity);
-//				System.out.println("\tconcurrentDistancePickupToDelivery = " + distancePickupToDelivery);
-				minOpponentDistance = Math.min(minOpponentDistance, distancePickupToDelivery);
-				double distancePickupToPickup     = opponentTask.pickupCity.distanceTo(task.pickupCity);
-//				System.out.println("\tconcurrentDistancePickupToPickup = " + distancePickupToPickup);
-				minOpponentDistance = Math.min(minOpponentDistance, distancePickupToPickup);
-				double distanceDeliveryToDelivery = opponentTask.deliveryCity.distanceTo(task.deliveryCity);
-//				System.out.println("\tconcurrentDistanceDeliveryToDelivery = " + distanceDeliveryToDelivery);
-				minOpponentDistance = Math.min(minOpponentDistance, distanceDeliveryToDelivery);
-			}
-		}
-		
-		double advantage = 1;
-		if (!(minOwnDistance == Double.POSITIVE_INFINITY || minOpponentDistance == 0)) {
-			advantage = minOpponentDistance / minOwnDistance;
-			if (advantage < 1) advantage = 1;
-		}
-		
-		return advantage;
 	}
 	
 	@Override

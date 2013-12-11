@@ -25,10 +25,12 @@ import logist.topology.Topology.City;
 @SuppressWarnings("unused")
 public class AuctionAgentDummy implements AuctionBehavior {
 
+	private final static long TIMEOUT_BID = 5 * 1000;
+	private final static long TIMEOUT_PLAN = 5 * 1000;
+	
 	private Topology topology;
 
 	private Agent agent;
-	//private Random random;
 	private List<Vehicle> vehicles;
 	private List<Task> tasks;
 	private Solution2 currentPlans;
@@ -51,10 +53,6 @@ public class AuctionAgentDummy implements AuctionBehavior {
 		futurePlans = new Solution2(new ArrayList<Task>());
 		futurePlans.cost = Double.POSITIVE_INFINITY;
 	
-		//this.currentCity = vehicle.homeCity();
-
-		/*long seed = -9019554669489983951L * currentCity.hashCode() * agent.id();
-		this.random = new Random(seed);*/
 	}
 
 	@Override
@@ -70,55 +68,52 @@ public class AuctionAgentDummy implements AuctionBehavior {
 	@Override
 	public Long askPrice(Task task) {
 
-		if(DUMB_TYPE.equals("Marginal")){
-		ArrayList<Task> futureTasks = new ArrayList<Task>(tasks);
-		futureTasks.add(task);
+		long timestart = System.currentTimeMillis();
 		
-		//TODO Loop
-		Double minCost = Double.POSITIVE_INFINITY;
-		for (int iter = 0; iter < 50; iter++){
-			Solution2 plan = centralizedPlan(vehicles, futureTasks, 0.8);
-			if(plan.cost < minCost){
-				minCost = plan.cost;
-				this.futurePlans = plan;
+		if (DUMB_TYPE.equals("Marginal")) {
+			ArrayList<Task> futureTasks = new ArrayList<Task>(tasks);
+			futureTasks.add(task);
+			
+			Double minCost = Double.POSITIVE_INFINITY;
+			
+			while (System.currentTimeMillis() < timestart + TIMEOUT_BID) {
+				Solution2 plan = centralizedPlan(vehicles, futureTasks, 0.8);
+				if (plan.cost < minCost) {
+					minCost = plan.cost;
+					this.futurePlans = plan;
+				}
 			}
-		}
-		
-		
-		double marginalCost = futurePlans.cost - currentPlans.cost;
-				
-		
-		return Math.max(0, Math.round(marginalCost));
-		} else if(DUMB_TYPE.equals("Random")){
-			return Math.round(Math.random()*5000);
+			
+			double marginalCost = futurePlans.cost - currentPlans.cost;
+			
+			return Math.max(0, Math.round(marginalCost));
+			
+		} else if (DUMB_TYPE.equals("Random")) {
+			return Math.round(Math.random() * 5000);
+			
 		} else {
 			return 0l;
 		}
 		
 	}
-	
-	/**
-	 * A function to have an estimation of our competing advantage for the
-	 * considered task.
-	 * @param task
-	 * @return
-	 */
-	
+
 	@Override
 	public List<Plan> plan(List<Vehicle> vehicles, TaskSet tasks) {
 		
+		long timestart = System.currentTimeMillis();
+		
 		double income = 0;
-		for(Task t: tasks){
-			income += t.reward;
+		for (Task task : tasks) {
+			income += task.reward;
 		}
+		
 		Solution2 sol = centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8);
-		for (int iter = 0; iter < 50; iter++){
+		while (System.currentTimeMillis() < timestart + TIMEOUT_PLAN) {
 			Solution2 plan = centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8);
-			if(plan.cost < sol.cost){
+			if (plan.cost < sol.cost) {
 				sol = plan;
 			}
 		}
-		
 		
 		System.out.println("************** \tDummy: "+(income - sol.cost));
 		
