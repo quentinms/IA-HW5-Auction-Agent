@@ -23,10 +23,10 @@ public class AuctionAgent implements AuctionBehavior {
 
 	private final static double BID_RATIO = 9./10.;
 	private final static double MARGINAL_COST_RATIO = 2./3.;
-//	private final static long TIMEOUT_BID = logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.BID) - logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.BID) / 10; // 10% margin
-//	private final static long TIMEOUT_PLAN = logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.PLAN) - logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.PLAN) / 10; // 10% margin
-	private final static long TIMEOUT_BID = 5 * 1000;
-	private final static long TIMEOUT_PLAN = 5 * 1000;
+	private final static long TIMEOUT_BID = logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.BID) - logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.BID) / 10; // 10% margin
+	private final static long TIMEOUT_PLAN = logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.PLAN) - logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.PLAN) / 10; // 10% margin
+//	private final static long TIMEOUT_BID = 5 * 1000;
+//	private final static long TIMEOUT_PLAN = 5 * 1000;
 	private final static double FUTURE_TASK_THRESHOLD = 0.20;
 	
 	private Topology topology;
@@ -72,19 +72,6 @@ public class AuctionAgent implements AuctionBehavior {
 			opponentID = (bids.length - 1) ^ agent.id(); // Only if there are only two agents
 		}
 		
-		double minOwnPickupDistance = Double.POSITIVE_INFINITY;
-		double minOwnDeliveryDistance = Double.POSITIVE_INFINITY;
-		for (Task ownTask : tasks) {
-			double distanceDeliveryToPickup   = ownTask.deliveryCity.distanceTo(previous.pickupCity);
-			minOwnPickupDistance = Math.min(minOwnPickupDistance, distanceDeliveryToPickup);
-			double distancePickupToDelivery   = ownTask.pickupCity.distanceTo(previous.deliveryCity);
-			minOwnDeliveryDistance = Math.min(minOwnDeliveryDistance, distancePickupToDelivery);
-			double distancePickupToPickup     = ownTask.pickupCity.distanceTo(previous.pickupCity);
-			minOwnPickupDistance = Math.min(minOwnPickupDistance, distancePickupToPickup);
-			double distanceDeliveryToDelivery = ownTask.deliveryCity.distanceTo(previous.deliveryCity);
-			minOwnDeliveryDistance = Math.min(minOwnDeliveryDistance, distanceDeliveryToDelivery);
-		}
-		
 		System.out.println("***********************************");
 		System.out.println("Task " + previous.id + "   Winner:" + winner + " for " + bids[winner]);
 		
@@ -122,7 +109,7 @@ public class AuctionAgent implements AuctionBehavior {
 		
 		Double minCost = Double.POSITIVE_INFINITY;
 		
-		while (System.currentTimeMillis() < timestart + TIMEOUT_BID * 1./3.) {
+		while (System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3.) {
 			Solution plan = centralizedPlan(vehicles, futureTasks, 0.8);
 			if (plan.cost < minCost) {
 				minCost = plan.cost;
@@ -134,17 +121,10 @@ public class AuctionAgent implements AuctionBehavior {
 		
 		/* Estimating the opponent's bid */
 		ArrayList<Task> futureAttributions;
+		
+		// Estimation when the other has no task is not really good, so we don't compute it
 		if (attributions.get(opponentID) == null) {
-			
-			futureAttributions = new ArrayList<Task>();
-			futureAttributions.add(task);
-			
-			Double minCostAdv = Double.POSITIVE_INFINITY;
-			while (System.currentTimeMillis() < timestart + TIMEOUT_BID) {
-				Solution plan = centralizedPlan(vehicles, futureTasks, 0.8);
-				minCostAdv = Math.min(minCostAdv, plan.cost);
-			}
-			estimatedBid = Math.round(minCostAdv);
+			estimatedBid = 0;
 			
 		} else {
 			
@@ -152,7 +132,7 @@ public class AuctionAgent implements AuctionBehavior {
 			futureAttributions.add(task);
 			
 			Double futureOpponentMinCost = Double.POSITIVE_INFINITY;
-			while (System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3.) {
+			while (System.currentTimeMillis() < timestart + TIMEOUT_BID * 5./6.) {
 				Solution plan = centralizedPlan(vehicles, futureAttributions, 0.8);
 				futureOpponentMinCost = Math.min(futureOpponentMinCost, plan.cost);
 			}
