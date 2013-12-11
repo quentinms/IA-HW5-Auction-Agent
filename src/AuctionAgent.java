@@ -192,7 +192,8 @@ public class AuctionAgent implements AuctionBehavior {
 		
 		Double minCost = Double.POSITIVE_INFINITY;
 		
-		for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID * 1./3. || i < LOOP_NUMBER; i++) {
+//		for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID * 1./3.; i++) {
+		while (System.currentTimeMillis() < timestart + TIMEOUT_BID * 1./3.) {
 			Solution plan = centralizedPlan(vehicles, futureTasks, 0.8);
 			if (plan.cost < minCost) {
 				minCost = plan.cost;
@@ -217,23 +218,26 @@ public class AuctionAgent implements AuctionBehavior {
 			
 			Double minCostAdv = Double.POSITIVE_INFINITY;
 //			timestart = System.currentTimeMillis();
-			for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3. && i < LOOP_NUMBER; i++) {
+//			for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3.; i++) {
+			while (System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3.) {
 				Solution plan = centralizedPlan(vehicles, futureTasks, 0.8);
 				minCostAdv = Math.min(minCostAdv, plan.cost);
 			}
-			 estimatedBid = Math.round(minCostAdv);
+			estimatedBid = Math.round(minCostAdv);
 			 
 		} else {
 			
 			Double minCostAdv1 = Double.POSITIVE_INFINITY;
-			for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3. && i < LOOP_NUMBER; i++) {
+//			for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3.; i++) {
+			while (System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3.) {
 				Solution plan = centralizedPlan(vehicles, futureAttributions, 0.8);
 				minCostAdv1 = Math.min(minCostAdv1, plan.cost);
 //				System.out.println("So far (1): " + (System.currentTimeMillis() - timestart));
 			}
 			
 			Double minCostAdv2 = Double.POSITIVE_INFINITY;
-			for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID && i < LOOP_NUMBER; i++) {
+//			for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID; i++) {
+			while (System.currentTimeMillis() < timestart + TIMEOUT_BID) {
 				Solution plan = centralizedPlan(vehicles, attributions.get(0), 0.8);
 				minCostAdv2 = Math.min(minCostAdv2, plan.cost);
 //				System.out.println("So far (2): " + (System.currentTimeMillis() - timestart));
@@ -355,7 +359,8 @@ public class AuctionAgent implements AuctionBehavior {
 		}
 		
 		Solution sol = centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8);
-		for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_PLAN; i++) {
+//		for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_PLAN; i++) {
+		while (System.currentTimeMillis() < timestart + TIMEOUT_PLAN) {
 			Solution plan = centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8);
 			if (plan.cost < sol.cost) {
 				sol = plan;
