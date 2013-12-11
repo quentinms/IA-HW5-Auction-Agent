@@ -47,6 +47,8 @@ public class AuctionAgent implements AuctionBehavior {
 	private double bias;
 	private double taskBiasCount = 1;
 	
+	double FUTURE_TASK_THRESHOLD = 0.20;
+	
 	
 	@Override
 	public void setup(Topology topology, TaskDistribution distribution, Agent agent) {
@@ -270,15 +272,38 @@ public class AuctionAgent implements AuctionBehavior {
 			return Math.round(marginalCost * MARGINAL_COST_RATIO);
 		}
 		
+		int futureInterestingTasks = taskDistrib(task.pickupCity, task.deliveryCity);
+		
 		System.out.println("Task " + task.id + " : " + marginalCost + " - " + estimatedBid);
 		//if (marginalCost > 0){
-			return Math.round(Math.max(marginalCost, estimatedBid * BID_RATIO));
+		return Math.round(Math.max(marginalCost - futureInterestingTasks*marginalCost/20, estimatedBid*9.0/10 - futureInterestingTasks*estimatedBid/20));
 //		} else {
 //			return Math.max(Math.round(estimatedBid * BID_RATIO), 0);//Math.round(marginalCost);
 //		}
 		
 	}
 	
+	
+	private int taskDistrib(City start, City end){
+			
+			int interestingFutureTasks = 0;
+			
+			List<City> path = start.pathTo(end);
+			for(int i = 0; i < path.size()-1; i++ ){
+				City pickup = path.get(i);
+				
+				for(int j = i + 1; j < path.size(); j++){
+					City delivery = path.get(j);
+					
+					if(distribution.probability(pickup, delivery) > FUTURE_TASK_THRESHOLD){
+						interestingFutureTasks++;
+					}
+					
+				}
+			}
+				
+		return interestingFutureTasks;
+	}
 	/**
 	 * A function to have an estimation of our competing advantage for the
 	 * considered task.
