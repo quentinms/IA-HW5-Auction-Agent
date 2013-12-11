@@ -17,8 +17,6 @@ import logist.task.TaskSet;
 import logist.topology.Topology;
 import logist.topology.Topology.City;
 
-// TODO: Make a timeout!
-
 /**
  * A very simple auction agent that assigns all tasks to its first vehicle and
  * handles them sequentially.
@@ -26,13 +24,14 @@ import logist.topology.Topology.City;
 @SuppressWarnings("unused")
 public class AuctionAgent implements AuctionBehavior {
 
-	private final static int LOOP_NUMBER = 50;
+	private final static int LOOP_NUMBER = 500;
 	private final static double BID_RATIO = 9./10.;
 	private final static double MARGINAL_COST_RATIO = 2./3.;
-//	private final static long TIMEOUT_BID = logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.BID);
-//	private final static long TIMEOUT_PLAN = logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.PLAN);
-	private final static long TIMEOUT_BID = 2 * 1000;
-	private final static long TIMEOUT_PLAN = 2 * 1000;
+//	private final static long TIMEOUT_BID = logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.BID) - 30*1000; // 30s margin
+//	private final static long TIMEOUT_PLAN = logist.LogistPlatform.getSettings().get(logist.LogistSettings.TimeoutKey.PLAN) - 30*1000; // 30s margin
+	private final static long TIMEOUT_BID = 1 * 1000;
+	private final static long TIMEOUT_PLAN = 1 * 1000;
+	private final static long PROGRAM_TIMESTART = System.currentTimeMillis();
 	
 	private Topology topology;
 	private TaskDistribution distribution;
@@ -51,6 +50,9 @@ public class AuctionAgent implements AuctionBehavior {
 	
 	@Override
 	public void setup(Topology topology, TaskDistribution distribution, Agent agent) {
+		
+		System.out.println("TIMEOUT_BID: " + TIMEOUT_BID);
+		System.out.println("TIMEOUT_PLAN: " + TIMEOUT_PLAN);
 
 		this.topology = topology;
 		this.distribution = distribution;
@@ -110,7 +112,11 @@ public class AuctionAgent implements AuctionBehavior {
 		
 		
 		System.out.println("estimatedBid: " + estimatedBid);
-		System.out.println("estimatedBid (w/o bias): " + (estimatedBid + Math.round(bias/(1.0 * (taskBiasCount)))));
+		System.out.println("estimatedBid (w/o bias): " + (estimatedBid + Math.round(bias/((double) (taskBiasCount)))));
+		
+//		System.out.println("bias/(taskBiasCount + 1): " + bias/(taskBiasCount + 1));
+//		System.out.println("bias/(1.0 * (taskBiasCount + 1)): " + bias/(1.0 * (taskBiasCount + 1)));
+//		System.out.println("bias/((double) (taskBiasCount + 1)): " + bias/((double) (taskBiasCount + 1)));
 		
 		System.out.println("actual bid: " + bids[0]);
 		System.out.println("*Difference: " + (estimatedBid - bids[0]));
@@ -150,7 +156,7 @@ public class AuctionAgent implements AuctionBehavior {
 		
 		
 //		if(Math.abs(estimatedBid - bids[0]) > 500){
-//			bias = bias + 0.9*(estimatedBid - bids[0]);
+//			bias = bias + 0.9 * (estimatedBid - bids[0]);
 //			taskBiasCount = taskBiasCount + 0.9;
 //		} else {
 			bias += (estimatedBid - bids[0]);
@@ -178,22 +184,20 @@ public class AuctionAgent implements AuctionBehavior {
 	
 	@Override
 	public Long askPrice(Task task) {
-
-//		long timeout = System.currentTimeMillis() + TIMEOUT_BID;
 		
+		long timestart = System.currentTimeMillis();
+
 		ArrayList<Task> futureTasks = new ArrayList<Task>(tasks);
 		futureTasks.add(task);
 		
 		Double minCost = Double.POSITIVE_INFINITY;
 		
-		long timestamp = System.currentTimeMillis();
-		for (int i = 0; timestamp < timestamp + TIMEOUT_BID * 1./3. || i < LOOP_NUMBER; i++) {
+		for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID * 1./3. || i < LOOP_NUMBER; i++) {
 			Solution plan = centralizedPlan(vehicles, futureTasks, 0.8);
 			if (plan.cost < minCost) {
 				minCost = plan.cost;
 				this.futurePlans = plan;
 			}
-			timestamp = System.currentTimeMillis();
 		}
 		
 		double marginalCost = futurePlans.cost - currentPlans.cost;
@@ -212,30 +216,29 @@ public class AuctionAgent implements AuctionBehavior {
 		if (attributions.get(0) == null) {
 			
 			Double minCostAdv = Double.POSITIVE_INFINITY;
-			timestamp = System.currentTimeMillis();
-			for (int i = 0; timestamp < timestamp + TIMEOUT_BID * 2./3. || i < LOOP_NUMBER; i++) {
+//			timestart = System.currentTimeMillis();
+			for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3. && i < LOOP_NUMBER; i++) {
 				Solution plan = centralizedPlan(vehicles, futureTasks, 0.8);
 				minCostAdv = Math.min(minCostAdv, plan.cost);
-				timestamp = System.currentTimeMillis();
 			}
 			 estimatedBid = Math.round(minCostAdv);
 			 
 		} else {
 			
 			Double minCostAdv1 = Double.POSITIVE_INFINITY;
-			timestamp = System.currentTimeMillis();
-			for (int i = 0; timestamp < timestamp + TIMEOUT_BID * 2./3. || i < LOOP_NUMBER; i++) {
+			for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID * 2./3. && i < LOOP_NUMBER; i++) {
 				Solution plan = centralizedPlan(vehicles, futureAttributions, 0.8);
 				minCostAdv1 = Math.min(minCostAdv1, plan.cost);
-				timestamp = System.currentTimeMillis();
+//				System.out.println("So far (1): " + (System.currentTimeMillis() - timestart));
 			}
 			
-			timestamp = System.currentTimeMillis();
 			Double minCostAdv2 = Double.POSITIVE_INFINITY;
-			for (int i = 0; timestamp < timestamp + TIMEOUT_BID || i < LOOP_NUMBER; i++) {
+			for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_BID && i < LOOP_NUMBER; i++) {
 				Solution plan = centralizedPlan(vehicles, attributions.get(0), 0.8);
 				minCostAdv2 = Math.min(minCostAdv2, plan.cost);
-				timestamp = System.currentTimeMillis();
+//				System.out.println("So far (2): " + (System.currentTimeMillis() - timestart));
+//				System.out.println("Now − (timestart + timeoutbid): " + (System.currentTimeMillis() - timestart - TIMEOUT_BID));
+//				System.out.println("Now < timestart + timeoutbid:." + (System.currentTimeMillis() < timestart + TIMEOUT_BID));
 			}
 			
 			estimatedBid = Math.round(minCostAdv1 - minCostAdv2);
@@ -258,6 +261,7 @@ public class AuctionAgent implements AuctionBehavior {
 			double cost = Math.min(marginalCost, percentage * factor * marginalCost);
 		}*/
 		
+		System.out.println("askPrice() took: " + (System.currentTimeMillis() - timestart));
 		if (tasks.size() <= 1) {
 			return Math.round(marginalCost * MARGINAL_COST_RATIO);
 		}
@@ -333,6 +337,9 @@ public class AuctionAgent implements AuctionBehavior {
 	
 	@Override
 	public List<Plan> plan(List<Vehicle> vehicles, TaskSet tasks) {
+		
+		long timestart = System.currentTimeMillis();
+		
 //		System.out.println(tasks);
 //		System.out.println(currentPlans.tasks);
 //		System.out.println(attributions);
@@ -348,17 +355,19 @@ public class AuctionAgent implements AuctionBehavior {
 		}
 		
 		Solution sol = centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8);
-		long timestamp = System.currentTimeMillis();
-		for (int i = 0; timestamp < timestamp + TIMEOUT_PLAN || i < LOOP_NUMBER; i++){
+		for (int i = 0; System.currentTimeMillis() < timestart + TIMEOUT_PLAN; i++) {
 			Solution plan = centralizedPlan(vehicles, new ArrayList<Task>(tasks), 0.8);
 			if (plan.cost < sol.cost) {
 				sol = plan;
 			}
-			timestamp = System.currentTimeMillis();
+//			System.out.println("Time elapsed since beginning of the function: " + (System.currentTimeMillis() - timestart));
+//			System.out.println("Now: " + System.currentTimeMillis() + ", timestart: " + timestart + ", timeout: " + TIMEOUT_PLAN);
+//			System.out.println("System.currentTimeMillis() < timestart + TIMEOUT_PLAN: " + (System.currentTimeMillis() < timestart + TIMEOUT_PLAN));
 		}
 		
 		
-		System.out.println("************** \tAgent: "+(income - sol.cost));
+		System.out.println("************** \tAgent: " + (income - sol.cost));
+		
 		
 		return sol.getPlan();
 	}
